@@ -15,6 +15,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,9 +49,51 @@ def ensure_cert(ip: str) -> tuple[Path, Path]:
     return cert, key
 
 
+OUT = ROOT / "out"
+BUILDS: dict[str, str] = {}  # имя скана → building / done / error
+
+
+def build(capture: Path):
+    """Сборка двойника на этом компьютере сразу после приёма скана."""
+    stem = capture.stem.replace("room-capture-", "")
+    dst = OUT / stem
+    dst.mkdir(parents=True, exist_ok=True)
+    BUILDS[stem] = "building"
+    with open(dst / "build.log", "w") as log:
+        code = subprocess.run(
+            ["uv", "run", "-q", "--python", "3.12", "--with", "numpy", "--with", "onnxruntime", "--with", "pillow",
+             "python", "-u", str(ROOT / "scripts" / "build_room.py"), str(capture), "--out", str(dst)],
+            stdout=log, stderr=subprocess.STDOUT, cwd=ROOT).returncode
+    BUILDS[stem] = "done" if code == 0 and (dst / "room.html").exists() else "error"
+    print(f"сборка {stem}: {BUILDS[stem]} — https://localhost:{PORT}/out/{stem}/room.html", flush=True)
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(WEB), **kw)
+
+    def translate_path(self, path):
+        # /out/<скан>/room.html — готовые двойники, остальное — страницы из web/
+        if path.startswith("/out/"):
+            rel = Path(path.split("?", 1)[0][len("/out/"):])
+            target = (OUT / rel).resolve()
+            return str(target) if OUT.resolve() in target.parents else str(OUT / "missing")
+        return super().translate_path(path)
+
+    def do_GET(self):
+        if self.path.startswith("/status/"):
+            stem = self.path[len("/status/"):]
+            log = OUT / stem / "build.log"
+            tail = log.read_text(errors="ignore").strip().splitlines()[-1:] if log.exists() else []
+            reply = json.dumps({"state": BUILDS.get(stem, "unknown"), "last": tail[0] if tail else ""},
+                               ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(reply)))
+            self.end_headers()
+            self.wfile.write(reply)
+            return
+        super().do_GET()
 
     def do_POST(self):
         if self.path != "/upload":
@@ -67,8 +110,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         CAPTURES.mkdir(exist_ok=True)
         name = f"room-capture-{dt.datetime.now():%Y-%m-%d-%H%M%S}.json"
         (CAPTURES / name).write_bytes(body)
-        print(f"принят скан: {CAPTURES / name} — {len(cap.get('frames', []))} кадров, «{cap.get('room')}»")
-        reply = json.dumps({"ok": True, "file": name}).encode()
+        print(f"принят скан: {CAPTURES / name} — {len(cap.get('frames', []))} кадров, «{cap.get('room')}»", flush=True)
+        stem = Path(name).stem.replace("room-capture-", "")
+        threading.Thread(target=build, args=(CAPTURES / name,), daemon=True).start()
+        reply = json.dumps({"ok": True, "file": name, "id": stem}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(reply)))

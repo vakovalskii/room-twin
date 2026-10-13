@@ -45,6 +45,9 @@
   input { width: 110px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ring); background: #1a1b18;
     color: var(--ink); font: inherit; text-align: right; }
   .hidden { display: none !important; }
+  .open { display: block; margin-top: 10px; padding: 15px; border-radius: 14px; text-align: center; font-weight: 600;
+    color: #11130d; background: var(--accent); text-decoration: none; }
+  button.ghost.on { background: #fff3c4; color: #3d2f00; }
 </style>
 </head>
 <body>
@@ -78,9 +81,11 @@
 <footer>
   <div class="hint" id="hint">Держи телефон ровно</div>
   <div class="row">
+    <button class="ghost hidden" id="torch">Фонарик</button>
     <button class="ghost" id="shot">Снять кадр</button>
     <button id="done" disabled>Готово</button>
   </div>
+  <a class="open hidden" id="open" href="#">Открыть двойника</a>
 </footer>
 
 <script>
@@ -183,12 +188,46 @@ $('go').onclick = async () => {
     video.srcObject = stream
     await video.play()
     window.addEventListener('deviceorientation', onOrient)
+    // фонарик есть не везде: кнопку показываем, только если камера его отдаёт
+    const track = stream.getVideoTracks()[0]
+    if (track.getCapabilities?.().torch) {
+      let on = false
+      $('torch').classList.remove('hidden')
+      $('torch').onclick = async () => {
+        on = !on
+        try { await track.applyConstraints({ advanced: [{ torch: on }] }) } catch { on = false }
+        $('torch').classList.toggle('on', on)
+      }
+    }
     $('start').classList.add('hidden')
     $('title').textContent = $('room').value || 'Скан комнаты'
     drawRing(null)
   } catch (err) {
     $('err').textContent = `Не получилось: ${err.message}. Страница должна открываться по https.`
     $('err').classList.remove('hidden')
+  }
+}
+
+// компьютер сразу собирает двойника; показываем ход сборки и ссылку на результат
+async function watchBuild(id) {
+  const hint = $('hint')
+  hint.className = 'hint'
+  for (;;) {
+    let st = { state: 'unknown', last: '' }
+    try { st = await (await fetch(`status/${id}`)).json() } catch {}
+    if (st.state === 'done') {
+      hint.textContent = 'Двойник готов'
+      $('open').href = `out/${id}/room.html`
+      $('open').classList.remove('hidden')
+      return
+    }
+    if (st.state === 'error') {
+      hint.textContent = `Сборка упала: ${st.last || 'смотри build.log на компьютере'}`
+      hint.className = 'hint warn'
+      return
+    }
+    hint.textContent = `Скан на компьютере, собираю… ${st.last ? '· ' + st.last.trim().slice(0, 60) : ''}`
+    await new Promise(r => setTimeout(r, 2500))
   }
 }
 
@@ -213,9 +252,9 @@ $('done').onclick = async () => {
   try {
     const r = await fetch('upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
     if (r.ok) {
-      const { file } = await r.json()
-      $('hint').textContent = `Готово, скан на компьютере: ${file}`
+      const { id } = await r.json()
       $('done').disabled = true
+      watchBuild(id)
       return
     }
   } catch {}
