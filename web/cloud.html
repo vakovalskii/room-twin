@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Облако точек комнаты</title>
+<style>
+  :root { --bg: #f3f4f1; --card: #fff; --ink: #22261f; --dim: #8b8f86; --line: #e4e6e0; --chip: #eef0ea; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #141613; --card: #1c1f1b; --ink: #ecede8; --dim: #8f948a; --line: #2b2f29; --chip: #252923; }
+  }
+  :root[data-theme="dark"] { --bg: #141613; --card: #1c1f1b; --ink: #ecede8; --dim: #8f948a; --line: #2b2f29; --chip: #252923; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 24px 16px 32px; }
+  h1 { margin: 0 0 4px; font-size: clamp(22px, 4vw, 30px); letter-spacing: -0.02em; }
+  .lead { color: var(--dim); margin: 0 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .stage { height: min(70vh, 680px); background: #0f100e; }
+  .tools { display: flex; gap: 8px; align-items: center; padding: 12px 14px; flex-wrap: wrap; border-top: 1px solid var(--line); }
+  .tools button { appearance: none; border: 1px solid transparent; background: none; color: var(--ink); font: inherit; padding: 7px 12px; border-radius: 10px; cursor: pointer; }
+  .tools button.on { background: var(--chip); border-color: var(--line); }
+  .tools label { display: flex; gap: 8px; align-items: center; color: var(--dim); }
+  .tools input[type=range] { width: 140px; }
+  .sp { flex: 1; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="page">
+  <h1 id="title">Облако точек</h1>
+  <p class="lead" id="lead"></p>
+  <div class="card">
+    <div class="stage" id="stage"></div>
+    <div class="tools">
+      <button id="persp" class="on">Перспектива</button>
+      <button id="top">Сверху</button>
+      <label>Срез по высоте <input id="cut" type="range" min="0.3" max="3.2" step="0.05" value="3.2"><span id="cutv"></span></label>
+      <label>Размер точки <input id="size" type="range" min="1" max="6" step="0.5" value="2.5"></label>
+      <span class="sp"></span>
+      <button id="reset">↺</button>
+    </div>
+  </div>
+</div>
+<script id="cloud-data" type="application/json">__CLOUD_JSON__</script>
+<script type="module">
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+const data = JSON.parse(document.getElementById('cloud-data').textContent)
+const bytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0))
+const raw = new Float32Array(bytes(data.xyz).buffer)
+const rgb = bytes(data.rgb)
+document.getElementById('title').textContent = `Облако точек · ${data.title}`
+document.getElementById('lead').textContent = `${data.n.toLocaleString('ru')} точек, метры. Камера в начале координат.`
+
+// комната (x восток, y север, z вверх) → three (y вверх, север = −z)
+const pos = new Float32Array(data.n * 3)
+const col = new Float32Array(data.n * 3)
+for (let i = 0; i < data.n; i++) {
+  pos[i * 3] = raw[i * 3]; pos[i * 3 + 1] = raw[i * 3 + 2]; pos[i * 3 + 2] = -raw[i * 3 + 1]
+  col[i * 3] = rgb[i * 3] / 255; col[i * 3 + 1] = rgb[i * 3 + 1] / 255; col[i * 3 + 2] = rgb[i * 3 + 2] / 255
+}
+const geo = new THREE.BufferGeometry()
+geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+const mat = new THREE.PointsMaterial({ size: 0.025, vertexColors: true, sizeAttenuation: true })
+mat.onBeforeCompile = shader => {
+  shader.uniforms.cut = { value: 3.2 }
+  mat.userData.shader = shader
+  shader.vertexShader = 'uniform float cut;\nvarying float vH;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvH = position.y;')
+  shader.fragmentShader = 'uniform float cut;\nvarying float vH;\n' + shader.fragmentShader.replace('void main() {', 'void main() {\n if (vH > cut) discard;')
+}
+const scene = new THREE.Scene()
+scene.add(new THREE.Points(geo, mat))
+scene.add(new THREE.GridHelper(12, 24, 0x555a50, 0x2a2d27))
+const camMark = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xff7a00 }))
+camMark.position.y = 1.4
+scene.add(camMark)
+
+const stage = document.getElementById('stage')
+const renderer = new THREE.WebGLRenderer({ antialias: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+stage.appendChild(renderer.domElement)
+const persp = new THREE.PerspectiveCamera(50, 1, 0.05, 100)
+const ortho = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100)
+let camera = persp
+const controls = new OrbitControls(persp, renderer.domElement)
+controls.enableDamping = true
+function home() { persp.position.set(-4.5, 6, 5.5); controls.target.set(0, 0.8, 0); controls.update() }
+home()
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight
+  renderer.setSize(w, h)
+  persp.aspect = w / h; persp.updateProjectionMatrix()
+  Object.assign(ortho, { left: -5 * w / h, right: 5 * w / h, top: 5, bottom: -5 }); ortho.updateProjectionMatrix()
+}
+addEventListener('resize', resize); resize()
+
+function view(top) {
+  document.getElementById('persp').classList.toggle('on', !top)
+  document.getElementById('top').classList.toggle('on', top)
+  camera = top ? ortho : persp
+  controls.object = camera
+  controls.enableRotate = !top
+  if (top) { ortho.position.set(0, 30, 0); ortho.up.set(0, 0, -1); controls.target.set(0, 0, 0) } else home()
+  controls.update()
+}
+document.getElementById('persp').onclick = () => view(false)
+document.getElementById('top').onclick = () => view(true)
+document.getElementById('reset').onclick = () => view(camera === ortho)
+const cut = document.getElementById('cut'), cutv = document.getElementById('cutv')
+cut.oninput = () => { if (mat.userData.shader) mat.userData.shader.uniforms.cut.value = +cut.value; cutv.textContent = `${(+cut.value).toFixed(2)} м` }
+cut.oninput()
+document.getElementById('size').oninput = e => { mat.size = e.target.value / 100 }
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera) })
+</script>
+</body>
+</html>

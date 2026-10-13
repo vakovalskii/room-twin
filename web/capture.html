@@ -8,10 +8,12 @@
   :root {
     --bg: #0e0f0d;
     --ink: #f3f1ea;
-    --dim: #9b988d;
+    --dim: #a6a398;
     --accent: #c8e86b;
-    --warn: #f0b45a;
+    --wait: #f3d36b;
+    --bad: #ff6b5a;
     --ring: rgba(243, 241, 234, 0.16);
+    --glass: rgba(14, 15, 13, 0.62);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
@@ -19,35 +21,57 @@
   body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
   video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
   .shade { position: fixed; inset: 0; z-index: 1; pointer-events: none;
-    background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 62%, rgba(0,0,0,.7) 100%); }
-  header, footer { position: relative; z-index: 2; padding: max(14px, env(safe-area-inset-top)) 16px 12px; }
-  footer { margin-top: auto; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
-  h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-  .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
-  .ring { position: relative; z-index: 2; width: min(62vw, 260px); aspect-ratio: 1; margin: 0 auto; }
-  .ring svg { width: 100%; height: 100%; overflow: visible; }
-  .ring .count { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-  .ring .big { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-  .ring .small { color: var(--dim); font-size: 12px; }
-  .hint { min-height: 2.8em; text-align: center; color: var(--ink); font-size: 14px; margin: 10px 0 14px; }
-  .hint.warn { color: var(--warn); }
+    background: linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,.75) 100%); }
+  header, footer, main { position: relative; z-index: 2; }
+  header { padding: max(12px, env(safe-area-inset-top)) 16px 8px; display: flex; gap: 12px; align-items: flex-start; }
+  header .grow { flex: 1; min-width: 0; }
+  .step { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  .stepname { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; margin-top: 2px; }
+  .bars { display: flex; gap: 4px; margin-top: 8px; }
+  .bars div { flex: 1; height: 4px; border-radius: 2px; background: var(--ring); overflow: hidden; }
+  .bars i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .plan { width: 112px; flex: none; border-radius: 12px; overflow: hidden; background: var(--glass);
+    border: 1px solid var(--ring); text-align: center; font-size: 11px; color: var(--dim); }
+  .plan img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #fafaf7; }
+  .plan .empty { aspect-ratio: 1; display: grid; place-items: center; padding: 8px; }
+  .plan span { display: block; padding: 4px 2px; }
+  .planbig { position: fixed; inset: 0; z-index: 5; background: rgba(0,0,0,.85); display: grid; place-items: center; padding: 16px; }
+  .planbig img { max-width: 100%; max-height: 80vh; border-radius: 12px; background: #fafaf7; }
+  main { flex: 1; display: grid; place-items: center; }
+  .aim { position: relative; width: min(64vw, 260px); aspect-ratio: 1; }
+  .aim svg { width: 100%; height: 100%; overflow: visible; }
+  .aim .mid { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+  .arrow { font-size: 54px; line-height: 1; font-weight: 300; }
+  .count { font-size: 12px; color: var(--dim); margin-top: 4px; font-variant-numeric: tabular-nums; max-width: 120px; }
+  .level { position: absolute; right: -30px; top: 8%; bottom: 8%; width: 10px; border-radius: 5px; background: var(--ring); }
+  .level .band { position: absolute; left: -4px; right: -4px; border-radius: 6px; border: 2px solid var(--accent); }
+  .level .dot { position: absolute; left: -5px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+    box-shadow: 0 0 0 3px rgba(0,0,0,.35); transform: translateY(-50%); }
+  footer { padding: 0 16px max(16px, env(safe-area-inset-bottom)); }
+  .say { text-align: center; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; min-height: 1.4em; }
+  .note { text-align: center; color: var(--dim); font-size: 13.5px; min-height: 2.6em; margin: 4px 0 12px; }
+  .note.bad { color: var(--bad); }
+  .note.wait { color: var(--wait); }
   .row { display: flex; gap: 10px; }
-  button { flex: 1; appearance: none; border: 0; border-radius: 14px; padding: 15px 14px; font: inherit;
+  button { flex: 1; appearance: none; border: 0; border-radius: 14px; padding: 15px 12px; font: inherit;
     font-weight: 600; color: #11130d; background: var(--accent); }
   button.ghost { background: rgba(243, 241, 234, 0.14); color: var(--ink); backdrop-filter: blur(10px); }
+  button.ghost.on { background: #fff3c4; color: #3d2f00; }
   button:disabled { opacity: .4; }
-  .start { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center;
-    gap: 14px; padding: 24px 20px; background: var(--bg); }
+  .start { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: center;
+    gap: 14px; padding: 24px 20px; background: var(--bg); overflow: auto; }
+  .start h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
   .start p { margin: 0; color: var(--dim); }
-  .start ol { margin: 0; padding-left: 20px; color: var(--ink); }
-  .start li { margin: 6px 0; }
+  .start ol { margin: 0; padding-left: 22px; }
+  .start li { margin: 7px 0; }
+  .start li b { font-weight: 650; }
+  .start button { flex: none; }
   label { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim); }
-  input { width: 110px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ring); background: #1a1b18;
+  input { width: 120px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ring); background: #1a1b18;
     color: var(--ink); font: inherit; text-align: right; }
   .hidden { display: none !important; }
   .open { display: block; margin-top: 10px; padding: 15px; border-radius: 14px; text-align: center; font-weight: 600;
     color: #11130d; background: var(--accent); text-decoration: none; }
-  button.ghost.on { background: #fff3c4; color: #3d2f00; }
 </style>
 </head>
 <body>
@@ -55,105 +79,166 @@
 <div class="shade"></div>
 
 <section class="start" id="start">
-  <h1>Скан комнаты для цифрового двойника</h1>
+  <h1>Скан комнаты</h1>
+  <p>Телефон только снимает. Глубину, план и 3D считает компьютер, пока ты поворачиваешься.</p>
   <ol>
-    <li>Встань в центр комнаты, телефон вертикально, камерой от себя.</li>
-    <li>Медленно повернись на полный круг. Кадры снимутся сами каждые 15°.</li>
-    <li>Можно пройти второй круг, чуть наклонив телефон вниз, чтобы попала мебель.</li>
-    <li>Нажми «Готово» и отправь файл.</li>
+    <li><b>Встань в центр комнаты</b> и не сходи с места, только поворачивайся.</li>
+    <li><b>Телефон вертикально, на уровне груди</b>, камерой от себя. Себя и людей в кадр не бери.</li>
+    <li><b>Три круга:</b> прямо, потом с наклоном вниз (пол и мебель), потом вверх (верх стен). Экран скажет, куда повернуться и как наклонить.</li>
+    <li>Кадр снимается сам, когда замираешь. Зелёный сектор — принят компьютером, жёлтый — считается, красный — брак, вернись туда.</li>
+    <li>Темно — включи фонарик кнопкой внизу.</li>
   </ol>
-  <label>Комната <input id="room" value="Гостиная"></label>
+  <label>Комната <input id="room" value="Спальня"></label>
   <label>Высота потолка, м <input id="ceiling" inputmode="decimal" placeholder="не знаю"></label>
   <button id="go">Начать</button>
   <p id="err" class="hidden"></p>
 </section>
 
 <header>
-  <h1 id="title">Скан комнаты</h1>
-  <div class="sub" id="sub">Поворачивайся медленно</div>
+  <div class="grow">
+    <div class="step" id="step">Круг 1 из 3</div>
+    <div class="stepname" id="stepname">Прямо перед собой</div>
+    <div class="bars"><div><i id="b0"></i></div><div><i id="b1"></i></div><div><i id="b2"></i></div></div>
+  </div>
+  <div class="plan" id="plan"><div class="empty" id="planempty">план появится после первых кадров</div><img id="planimg" class="hidden" alt=""><span id="size">компьютер</span></div>
 </header>
 
-<div class="ring">
-  <svg viewBox="-110 -110 220 220" id="svg"></svg>
-  <div class="count"><div><div class="big" id="n">0</div><div class="small">кадров</div></div></div>
-</div>
+<main>
+  <div class="aim">
+    <svg viewBox="-115 -115 230 230" id="svg"></svg>
+    <div class="mid"><div><div class="arrow" id="arrow">↻</div><div class="count" id="count">0 кадров</div></div></div>
+    <div class="level"><div class="band" id="band"></div><div class="dot" id="dot"></div></div>
+  </div>
+</main>
 
 <footer>
-  <div class="hint" id="hint">Держи телефон ровно</div>
+  <div class="say" id="say">Держи ровно</div>
+  <div class="note" id="note">&nbsp;</div>
   <div class="row">
     <button class="ghost hidden" id="torch">Фонарик</button>
-    <button class="ghost" id="shot">Снять кадр</button>
+    <button class="ghost" id="shot">Снять</button>
     <button id="done" disabled>Готово</button>
   </div>
-  <a class="open hidden" id="open" href="#">Открыть двойника</a>
+  <a class="open hidden" id="open" href="#">Открыть облако точек</a>
 </footer>
+<div class="planbig hidden" id="planbig"><img id="planbigimg" alt=""></div>
 
 <script>
-// Скан: камера + ориентация телефона. Каждый кадр хранит направление камеры
-// (yaw, pitch по фронтальной оси задней камеры) — сервер по ним собирает план.
-const STEP = 15            // градусов между автоснимками
-const SECTORS = 360 / STEP
+// Телефон — только камера и гироскоп. Каждый кадр сразу уходит на компьютер (serve_capture.py),
+// тот считает глубину, бракует плохие кадры и рисует план; телефон показывает, что доснять.
+// Ряды: прямо (каждые 15°), вниз и вверх (каждые 30°). Порядок обхода — прямо → вниз → вверх.
+const ROWS = [
+  { key: 'mid', pitch: 0, step: 15, name: 'Прямо перед собой', need: 0.85 },
+  { key: 'low', pitch: -30, step: 30, name: 'Наклони вниз: пол и мебель' },
+  { key: 'high', pitch: 30, step: 30, name: 'Наклони вверх: верх стен' },
+]
+const RADII = [[94, 78], [72, 58], [112, 100]]  // прямо — среднее кольцо, вниз — внутреннее, вверх — внешнее
+const TOL = 11              // допуск по наклону, градусов
 const $ = id => document.getElementById(id)
 const video = $('video')
-const frames = []
-let orient = null          // последнее событие ориентации
-let lastYaw = null
-let lastMove = 0
-let stream = null
+const frames = []           // {row, sector, state, reason, srv, jpeg, ...метаданные}
+let orient = null, lastMove = 0, stream = null, liveId = null, planVer = -1
+let lastSnapAt = 0, uploading = false
 
-// Направление задней камеры по углам W3C (Z-X'-Y''): камера смотрит вдоль -Z устройства
 function cameraDir(a, b, g) {
+  // направление задней камеры по углам W3C (Z-X'-Y''): −Z устройства, третий столбец Rz(a)·Rx(b)·Ry(g)
   const r = Math.PI / 180
   const [ca, sa, cb, sb, cg, sg] = [Math.cos(a * r), Math.sin(a * r), Math.cos(b * r), Math.sin(b * r), Math.cos(g * r), Math.sin(g * r)]
-  // третий столбец матрицы R = Rz(a)·Rx(b)·Ry(g), со знаком минус
-  const x = -(ca * sg + sa * sb * cg)
-  const y = -(sa * sg - ca * sb * cg)
-  const z = -(cb * cg)
-  const yaw = (Math.atan2(x, y) * 180 / Math.PI + 360) % 360
-  const pitch = Math.asin(Math.max(-1, Math.min(1, z))) * 180 / Math.PI
-  return { yaw, pitch }
+  const x = -(ca * sg + sa * sb * cg), y = -(sa * sg - ca * sb * cg), z = -(cb * cg)
+  return { yaw: (Math.atan2(x, y) * 180 / Math.PI + 360) % 360, pitch: Math.asin(Math.max(-1, Math.min(1, z))) * 180 / Math.PI }
+}
+const wrap = d => ((d + 540) % 360) - 180
+const sectors = row => 360 / row.step
+const sectorOf = (row, yaw) => Math.floor(((yaw + row.step / 2) % 360) / row.step) % sectors(row)
+
+function cellState(ri, s) {
+  // ok — есть принятый кадр; wait — отправлен или считается; bad — только забракованные
+  let st = null
+  for (const f of frames) if (f.row === ri && f.sector === s) {
+    if (f.state === 'ok') return 'ok'
+    if (f.state !== 'bad') st = 'wait'
+    else if (!st) st = 'bad'
+  }
+  return st
+}
+const share = (ri, want) => {
+  let n = 0
+  for (let s = 0; s < sectors(ROWS[ri]); s++) { const st = cellState(ri, s); if (want ? st === want : st && st !== 'bad') n++ }
+  return n / sectors(ROWS[ri])
+}
+function activeRow() {
+  for (let ri = 0; ri < ROWS.length; ri++) if (share(ri) < 1) return ri
+  return -1
 }
 
-function angleDiff(a, b) { return Math.abs(((a - b + 540) % 360) - 180) }
-
-function drawRing(current) {
-  const covered = new Set(frames.map(f => Math.floor(f.yaw / STEP) % SECTORS))
+function draw(dir) {
+  const ar = activeRow()
+  const p = (ang, rad) => `${(Math.cos(ang) * rad).toFixed(1)} ${(Math.sin(ang) * rad).toFixed(1)}`
   let html = ''
-  for (let i = 0; i < SECTORS; i++) {
-    const a0 = (i * STEP - 90 + 1.5) * Math.PI / 180
-    const a1 = ((i + 1) * STEP - 90 - 1.5) * Math.PI / 180
-    const R = 100, r = 84
-    const p = (ang, rad) => `${(Math.cos(ang) * rad).toFixed(1)} ${(Math.sin(ang) * rad).toFixed(1)}`
-    const fill = covered.has(i) ? 'var(--accent)' : 'var(--ring)'
-    html += `<path d="M ${p(a0, R)} A ${R} ${R} 0 0 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 0 0 ${p(a0, r)} Z" fill="${fill}"/>`
-  }
-  if (current != null) {
-    const a = (current - 90) * Math.PI / 180
-    html += `<circle cx="${(Math.cos(a) * 92).toFixed(1)}" cy="${(Math.sin(a) * 92).toFixed(1)}" r="7" fill="#fff"/>`
+  ROWS.forEach((row, ri) => {
+    const [R, r] = RADII[ri]
+    for (let s = 0; s < sectors(row); s++) {
+      const a0 = ((s - 0.5) * row.step - 90 + 1.2) * Math.PI / 180, a1 = ((s + 0.5) * row.step - 90 - 1.2) * Math.PI / 180
+      const st = cellState(ri, s)
+      const fill = st === 'ok' ? 'var(--accent)' : st === 'wait' ? 'var(--wait)' : st === 'bad' ? 'var(--bad)'
+        : ri === ar ? 'rgba(243,241,234,.34)' : 'var(--ring)'
+      html += `<path d="M ${p(a0, R)} A ${R} ${R} 0 0 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 0 0 ${p(a0, r)} Z" fill="${fill}"/>`
+    }
+  })
+  if (dir) {
+    // белая точка — куда сейчас смотрит камера, на кольце нужного круга
+    const [R, r] = RADII[ar < 0 ? 0 : ar], a = (dir.yaw - 90) * Math.PI / 180
+    html += `<circle cx="${(Math.cos(a) * (R + r) / 2).toFixed(1)}" cy="${(Math.sin(a) * (R + r) / 2).toFixed(1)}" r="8" fill="#fff" stroke="#000" stroke-opacity=".4" stroke-width="2"/>`
   }
   $('svg').innerHTML = html
+  ROWS.forEach((_, ri) => { $('b' + ri).style.width = `${Math.round(share(ri) * 100)}%` })
+  const ok = frames.filter(f => f.state === 'ok').length, bad = frames.filter(f => f.state === 'bad').length
+  $('count').textContent = `${ok} принято${bad ? ` · ${bad} брак` : ''}`
 }
 
-async function snap(dir, auto) {
-  if (!video.videoWidth) return
-  const long = 1280
-  const k = long / Math.max(video.videoWidth, video.videoHeight)
-  const c = document.createElement('canvas')
-  c.width = Math.round(video.videoWidth * k)
-  c.height = Math.round(video.videoHeight * k)
-  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height)
-  const jpeg = c.toDataURL('image/jpeg', 0.82)
-  frames.push({
-    i: frames.length, t: Date.now(), auto,
-    yaw: +dir.yaw.toFixed(2), pitch: +dir.pitch.toFixed(2),
-    alpha: orient?.alpha ?? null, beta: orient?.beta ?? null, gamma: orient?.gamma ?? null,
-    screen_angle: screen.orientation?.angle ?? window.orientation ?? 0,
-    width: c.width, height: c.height, jpeg,
-  })
-  lastYaw = dir.yaw
-  $('n').textContent = frames.length
-  $('done').disabled = frames.length < 6
-  if (navigator.vibrate) navigator.vibrate(15)
+function guide(dir) {
+  const ar = activeRow()
+  const say = $('say'), arrow = $('arrow')
+  // шкала наклона: верх = вверх 45°, рамка — нужный круг, точка — где телефон сейчас
+  const toY = p => 50 - Math.max(-45, Math.min(45, p)) / 45 * 50
+  $('dot').style.top = `${toY(dir.pitch)}%`
+  if (ar < 0) {
+    $('step').textContent = 'Все три круга'
+    $('stepname').textContent = 'Комната отснята'
+    say.textContent = 'Жми «Готово»'
+    arrow.textContent = '✓'
+    $('band').style.display = 'none'
+    return null
+  }
+  const row = ROWS[ar]
+  $('band').style.display = ''
+  $('band').style.top = `${toY(row.pitch + TOL)}%`
+  $('band').style.height = `${TOL * 2 / 90 * 100}%`
+  $('step').textContent = `Круг ${ar + 1} из 3`
+  $('stepname').textContent = row.name
+  const dp = dir.pitch - row.pitch
+  if (Math.abs(dp) > TOL) {
+    arrow.textContent = dp > 0 ? '↓' : '↑'
+    say.textContent = dp > 0 ? 'Наклони телефон ниже' : 'Наклони телефон выше'
+    return null
+  }
+  const here = sectorOf(row, dir.yaw)
+  if (!cellState(ar, here) || cellState(ar, here) === 'bad') {
+    arrow.textContent = '◉'; say.textContent = 'Держи, снимаю'
+    return { ri: ar, s: here }
+  }
+  // ближайший пустой или забракованный сектор этого круга — туда и поворачиваем
+  let best = null
+  for (let s = 0; s < sectors(row); s++) {
+    const st = cellState(ar, s)
+    if (st && st !== 'bad') continue
+    const d = wrap(s * row.step - dir.yaw)
+    if (best === null || Math.abs(d) < Math.abs(best)) best = d
+  }
+  if (best === null) { arrow.textContent = '…'; say.textContent = 'Жду ответа компьютера'; return null }
+  arrow.textContent = best > 0 ? '→' : '←'
+  say.textContent = best > 0 ? 'Поворачивайся вправо' : 'Поворачивайся влево'
+  return null
 }
 
 function onOrient(e) {
@@ -161,20 +246,103 @@ function onOrient(e) {
   const prev = orient
   orient = e
   const dir = cameraDir(e.alpha, e.beta, e.gamma)
-  drawRing(dir.yaw)
   if (prev && Math.abs(prev.alpha - e.alpha) + Math.abs(prev.beta - e.beta) > 1.2) lastMove = performance.now()
-  const steady = performance.now() - lastMove > 250
-  const hint = $('hint')
-  if (Math.abs(dir.pitch) > 35) {
-    hint.textContent = dir.pitch > 0 ? 'Опусти телефон к горизонту' : 'Подними телефон к горизонту'
-    hint.className = 'hint warn'
-    return
-  }
-  hint.className = 'hint'
-  const covered = new Set(frames.map(f => Math.floor(f.yaw / STEP) % SECTORS)).size
-  hint.textContent = covered >= SECTORS ? 'Круг пройден. Можно «Готово» или второй круг ниже' : steady ? 'Поворачивайся дальше' : 'Медленнее, жду, пока кадр не смажется'
-  if (steady && (lastYaw == null || angleDiff(dir.yaw, lastYaw) >= STEP)) snap(dir, true)
+  const target = guide(dir)
+  draw(dir)
+  if (!target) return
+  if (performance.now() - lastMove < 300) { $('arrow').textContent = '•'; $('say').textContent = 'Замри на секунду'; return }
+  if (performance.now() - lastSnapAt > 450) snap(dir, true, target)
 }
+
+function grab() {
+  const k = 1280 / Math.max(video.videoWidth, video.videoHeight)
+  const c = document.createElement('canvas')
+  c.width = Math.round(video.videoWidth * k); c.height = Math.round(video.videoHeight * k)
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height)
+  return { jpeg: c.toDataURL('image/jpeg', 0.82), width: c.width, height: c.height }
+}
+
+function snap(dir, auto, target) {
+  if (!video.videoWidth) return
+  lastSnapAt = performance.now()
+  if (!target) {
+    // ручной кадр — в ближайший круг по наклону
+    let ri = 0
+    ROWS.forEach((r, k) => { if (Math.abs(dir.pitch - r.pitch) < Math.abs(dir.pitch - ROWS[ri].pitch)) ri = k })
+    target = { ri, s: sectorOf(ROWS[ri], dir.yaw) }
+  }
+  frames.push({
+    row: target.ri, sector: target.s, state: liveId ? 'queued' : 'local', reason: null, srv: null,
+    t: Date.now(), auto, yaw: +dir.yaw.toFixed(2), pitch: +dir.pitch.toFixed(2),
+    alpha: orient?.alpha ?? null, beta: orient?.beta ?? null, gamma: orient?.gamma ?? null,
+    screen_angle: screen.orientation?.angle ?? window.orientation ?? 0, ...grab(),
+  })
+  if (navigator.vibrate) navigator.vibrate(15)
+  updateDone()
+  pump()
+}
+
+async function pump() {
+  // кадры уходят по одному и по порядку: номер на компьютере = порядок прихода
+  if (!liveId || uploading) return
+  uploading = true
+  try {
+    for (const f of frames) {
+      if (f.state !== 'queued') continue
+      const { row, sector, state, reason, srv, ...meta } = f
+      const r = await fetch(`live/${liveId}/frame`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...meta, row: ROWS[row].key }) })
+      if (!r.ok) throw new Error(r.status)
+      f.srv = (await r.json()).i
+      f.state = 'sent'
+      f.jpeg = null  // копия теперь на компьютере
+    }
+  } catch {
+    note('Компьютер не отвечает, кадры копятся на телефоне', 'wait')
+  }
+  uploading = false
+}
+
+function note(text, kind = '') { $('note').textContent = text || ' '; $('note').className = 'note ' + kind }
+
+let badShownAt = 0
+async function poll() {
+  if (!liveId) return
+  try {
+    const st = await (await fetch(`live/${liveId}/state`)).json()
+    for (const s of st.frames) {
+      const f = frames.find(x => x.srv === s.i)
+      if (!f) continue
+      if (s.state === 'bad' && f.state !== 'bad') { note(`Кадр забракован: ${s.reason}`, 'bad'); badShownAt = Date.now() }
+      f.state = s.state === 'queued' ? 'sent' : s.state
+      f.reason = s.reason
+    }
+    if (Date.now() - badShownAt > 5000) {
+      const tip = st.frames.at(-1)?.tip
+      if (tip) note(tip, 'wait')
+      else if (st.queued > 2) note(`Компьютер считает глубину, в очереди ${st.queued}`, 'wait')
+      else note(frames.length ? 'Компьютер успевает, продолжай' : '')
+    }
+    if (st.plan_ver > 0 && st.plan_ver !== planVer) {
+      planVer = st.plan_ver
+      const src = `live/${liveId}/plan.png?v=${planVer}`
+      $('planimg').src = src; $('planbigimg').src = src
+      $('planimg').classList.remove('hidden'); $('planempty').classList.add('hidden')
+    }
+    $('size').textContent = st.size ? `≈ ${st.size[0]} × ${st.size[1]} м` : 'план с компьютера'
+    if (orient) draw(cameraDir(orient.alpha, orient.beta, orient.gamma))
+    updateDone()
+    pump()
+  } catch {}
+  setTimeout(poll, 1200)
+}
+
+function updateDone() {
+  $('done').disabled = (liveId ? share(0, 'ok') : share(0)) < ROWS[0].need
+}
+
+$('plan').onclick = () => planVer > 0 && $('planbig').classList.remove('hidden')
+$('planbig').onclick = () => $('planbig').classList.add('hidden')
 
 $('go').onclick = async () => {
   try {
@@ -187,9 +355,8 @@ $('go').onclick = async () => {
     })
     video.srcObject = stream
     await video.play()
-    window.addEventListener('deviceorientation', onOrient)
-    // фонарик есть не везде: кнопку показываем, только если камера его отдаёт
     const track = stream.getVideoTracks()[0]
+    // фонарик есть не везде: кнопку показываем, только если камера его отдаёт
     if (track.getCapabilities?.().torch) {
       let on = false
       $('torch').classList.remove('hidden')
@@ -199,76 +366,70 @@ $('go').onclick = async () => {
         $('torch').classList.toggle('on', on)
       }
     }
+    const ceiling = parseFloat(($('ceiling').value || '').replace(',', '.'))
+    try {
+      const r = await fetch('live/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        room: $('room').value || 'Комната', ceiling_m: Number.isFinite(ceiling) ? ceiling : null,
+        created: new Date().toISOString(), user_agent: navigator.userAgent, camera: track.getSettings?.() ?? {},
+      }) })
+      if (r.ok) { liveId = (await r.json()).id; poll() }
+    } catch {}
+    if (!liveId) note('Компьютера не видно — сниму на телефон, потом отдашь файлом', 'wait')
+    window.addEventListener('deviceorientation', onOrient)
     $('start').classList.add('hidden')
-    $('title').textContent = $('room').value || 'Скан комнаты'
-    drawRing(null)
+    draw(null)
   } catch (err) {
     $('err').textContent = `Не получилось: ${err.message}. Страница должна открываться по https.`
     $('err').classList.remove('hidden')
   }
 }
 
-// компьютер сразу собирает двойника; показываем ход сборки и ссылку на результат
+$('shot').onclick = () => orient && snap(cameraDir(orient.alpha, orient.beta, orient.gamma), false)
+
 async function watchBuild(id) {
-  const hint = $('hint')
-  hint.className = 'hint'
   for (;;) {
     let st = { state: 'unknown', last: '' }
     try { st = await (await fetch(`status/${id}`)).json() } catch {}
     if (st.state === 'done') {
-      hint.textContent = 'Двойник готов'
-      $('open').href = `out/${id}/room.html`
+      $('say').textContent = 'Облако готово'
+      note('Дальше комнату по облаку и кадрам собирает Claude на компьютере')
+      $('open').href = `out/${id}/cloud.html`
       $('open').classList.remove('hidden')
       return
     }
-    if (st.state === 'error') {
-      hint.textContent = `Сборка упала: ${st.last || 'смотри build.log на компьютере'}`
-      hint.className = 'hint warn'
-      return
-    }
-    hint.textContent = `Скан на компьютере, собираю… ${st.last ? '· ' + st.last.trim().slice(0, 60) : ''}`
-    await new Promise(r => setTimeout(r, 2500))
+    if (st.state === 'error') { note(`Сборка упала: ${st.last || 'смотри build.log'}`, 'bad'); return }
+    $('say').textContent = 'Компьютер собирает облако'
+    note(st.last ? st.last.trim().slice(0, 70) : 'выравниваю кадры…', 'wait')
+    await new Promise(r => setTimeout(r, 2000))
   }
 }
 
-$('shot').onclick = () => orient && snap(cameraDir(orient.alpha, orient.beta, orient.gamma), false)
-
 $('done').onclick = async () => {
   window.removeEventListener('deviceorientation', onOrient)
-  const track = stream?.getVideoTracks()[0]
-  const ceiling = parseFloat(($('ceiling').value || '').replace(',', '.'))
-  const capture = {
-    format: 'room-twin-capture/1',
-    room: $('room').value || 'Комната',
-    ceiling_m: Number.isFinite(ceiling) ? ceiling : null,
-    created: new Date().toISOString(),
-    user_agent: navigator.userAgent,
-    camera: track?.getSettings?.() ?? {},
-    frames,
+  $('done').disabled = true
+  if (liveId) {
+    $('say').textContent = 'Отправляю остаток…'
+    while (uploading) await new Promise(r => setTimeout(r, 200))
+    await pump()
+    try {
+      const r = await fetch(`live/${liveId}/finish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      if (r.ok) { liveId = null; watchBuild((await r.json()).id); return }
+    } catch {}
   }
-  const body = JSON.stringify(capture)
-  // открыто с serve_capture.py — скан сразу уходит на компьютер
-  $('hint').textContent = 'Отправляю на компьютер…'
-  try {
-    const r = await fetch('upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
-    if (r.ok) {
-      const { id } = await r.json()
-      $('done').disabled = true
-      watchBuild(id)
-      return
-    }
-  } catch {}
-  // иначе — файлом: поделиться или скачать
-  $('hint').textContent = 'Сохрани файл и передай его на компьютер'
+  // без компьютера — файлом: поделиться или скачать
+  const ceiling = parseFloat(($('ceiling').value || '').replace(',', '.'))
+  const body = JSON.stringify({
+    format: 'room-twin-capture/1', room: $('room').value || 'Комната', ceiling_m: Number.isFinite(ceiling) ? ceiling : null,
+    created: new Date().toISOString(), user_agent: navigator.userAgent,
+    camera: stream?.getVideoTracks()[0]?.getSettings?.() ?? {},
+    frames: frames.filter(f => f.jpeg).map(({ row, sector, state, reason, srv, ...f }, i) => ({ ...f, i, row: ROWS[row].key })),
+  })
+  note('Сохрани файл и передай его на компьютер')
   const name = `room-capture-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`
   const file = new File([body], name, { type: 'application/json' })
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: name }); return } catch {}
-  }
+  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return } catch {} }
   const a = document.createElement('a')
-  a.href = URL.createObjectURL(file)
-  a.download = name
-  a.click()
+  a.href = URL.createObjectURL(file); a.download = name; a.click()
 }
 </script>
 </body>
