@@ -29,6 +29,8 @@ import onnxruntime as ort
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from render_html import embed_json  # noqa: E402
 MODEL = ROOT / "models" / "da2-metric-indoor-small.onnx"
 ND_BASE = os.getenv("ND_BASE_URL", "https://api.neuraldeep.ru/v1").rstrip("/")
 VISION_MODEL = os.getenv("NDT_VISION_MODEL", "qwen3.6-fp8-noreason")
@@ -389,7 +391,7 @@ def main():
         })
     (out / "room.json").write_text(json.dumps(room, ensure_ascii=False, indent=2))
     viewer = (ROOT / "web" / "viewer.html").read_text()
-    (out / "room.html").write_text(viewer.replace("__ROOM_JSON__", json.dumps(room, ensure_ascii=False)))
+    (out / "room.html").write_text(viewer.replace("__ROOM_JSON__", embed_json(room)))
     np.save(out / "wall_points.npy", to_room(xy, rect))
     print(f"готово: {out / 'room.html'} (данные в {out / 'room.json'}) — предметов {len(room['objects'])}, проёмов {len(room['openings'])}")
 

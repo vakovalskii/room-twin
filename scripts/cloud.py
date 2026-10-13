@@ -27,6 +27,7 @@ import onnxruntime as ort
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from render_html import embed_json  # noqa: E402
 from build_room import MODEL, ROOT, depth_map, fit_rectangle, focal_px, rotation, to_room  # noqa: E402
 
 
@@ -111,7 +112,9 @@ def refine_poses(frames, cam_h: float, ceiling: float, passes: int = 3, max_pts:
     for fr in frames:
         # без маски чистки: она режет стены под острым углом (скачок глубины > 4 %), а для выравнивания
         # они самые ценные; проверено на реальном скане — с маской разброс стен 0.22 м, без — 0.16 м
-        p = world(fr["cam"].reshape(-1, 3), 0.0, fr["pitch"])
+        c = fr["cam"].reshape(-1, 3)
+        c = c[(c[:, 2] > 0.35) & (c[:, 2] < 7.0)]  # только дальность: мусор ближе 35 см и дальше 7 м — вон
+        p = world(c, 0.0, fr["pitch"])
         if len(p) > max_pts:  # одна выборка на кадр: от масштаба и курса она не зависит, оценки сравнимы
             p = p[rng.choice(len(p), max_pts, replace=False)]
         base.append(p)
@@ -129,14 +132,18 @@ def refine_poses(frames, cam_h: float, ceiling: float, passes: int = 3, max_pts:
         for k, fr in enumerate(frames):
             others = np.concatenate([r for j, r in enumerate(rings) if j != k] or [np.zeros((0, 2))])
             occ = occupancy(others, origin, size, cell)
-            best = (-1, fr["yaw"], fr["scale"])
+            # стартуем с текущей позы: двигаем, только если нашлось заметно лучше — иначе без данных
+            # (пустой кадр, нет соседей) поиск уводил бы кадр на край диапазона (−8°, ×0.88) каждый проход
+            cur = grid_score(ring(k, fr["yaw"], fr["scale"]), occ, origin, cell)
+            best = (cur, fr["yaw"], fr["scale"])
             for s in (0.88, 0.92, 0.96, 1.0, 1.04, 1.08, 1.12):
                 scale = fr["scale"] * s
                 for dy in np.arange(-8, 8.01, 1.0):
                     sc = grid_score(ring(k, fr["yaw"] + dy, scale), occ, origin, cell)
                     if sc > best[0]:
                         best = (sc, fr["yaw"] + dy, scale)
-            fr["yaw"], fr["scale"] = best[1], float(np.clip(best[2], 0.75, 1.3))
+            if best[0] >= max(50, cur * 1.02):
+                fr["yaw"], fr["scale"] = best[1], float(np.clip(best[2], 0.75, 1.3))
             rings[k] = ring(k, fr["yaw"], fr["scale"])
 
 
@@ -286,7 +293,7 @@ def cloud_html(path: Path, xyz: np.ndarray, rgb: np.ndarray, title: str):
     data = {"title": title, "n": len(xyz),
             "xyz": base64.b64encode(xyz.astype("<f4").tobytes()).decode(),
             "rgb": base64.b64encode(rgb.astype(np.uint8).tobytes()).decode()}
-    path.write_text(tpl.replace("__CLOUD_JSON__", json.dumps(data)))
+    path.write_text(tpl.replace("__CLOUD_JSON__", embed_json(data)))
 
 
 def main():
@@ -317,6 +324,8 @@ def main():
         frames.append({"i": fr["i"], "yaw": fr["yaw"], "yaw_gyro": fr["yaw"], "pitch": fr["pitch"], "scale": 1.0,
                        "cam": cam, "rgb": rgb, "ok": ok_full[vs, us]})
     print(f"кадров в работе: {len(frames)} (выкинуты: {sorted(drop) or 'нет'})")
+    if len(frames) < 4:
+        sys.exit(f"мало годных кадров ({len(frames)}): нужно доснять — хотя бы круг прямо")
 
     cam_h = floor_height(frames)
     print(f"телефон над полом: {cam_h:.2f} м")
@@ -349,6 +358,8 @@ def main():
 
     # прямоугольник комнаты по точкам стен → облако в координатах комнаты (угол SW в начале, как в room.json)
     walls = xyz[(xyz[:, 2] > 1.0) & (xyz[:, 2] < ceiling - 0.15)][:, :2]
+    if len(walls) < 500:
+        sys.exit(f"стен почти не видно ({len(walls)} точек выше 1 м): сними круг прямо, телефон на уровне груди")
     rect = fit_rectangle(walls[:: max(1, len(walls) // 20000)])
     print(f"комната {rect['x1'] - rect['x0']:.2f} × {rect['y1'] - rect['y0']:.2f} м, разворот {rect['angle_deg']:.1f}°, "
           f"разброс стен {rect['fit_error_m']:.2f} м")

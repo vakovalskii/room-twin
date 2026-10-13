@@ -298,8 +298,10 @@ function snap(dir, auto, target) {
 }
 
 async function pump() {
-  // кадры уходят по одному и по порядку: номер на компьютере = порядок прихода
-  if (!liveId || uploading) return
+  // кадры уходят по одному и по порядку: номер на компьютере = порядок прихода.
+  // true — на телефоне не осталось неотправленных кадров
+  if (!liveId) return false
+  if (uploading) return frames.every(f => f.state !== 'queued')
   uploading = true
   try {
     for (const f of frames) {
@@ -316,6 +318,7 @@ async function pump() {
     note('Компьютер не отвечает, кадры копятся на телефоне', 'wait')
   }
   uploading = false
+  return frames.every(f => f.state !== 'queued')
 }
 
 function note(text, kind = '') { $('note').textContent = text || ' '; $('note').className = 'note ' + kind }
@@ -427,13 +430,27 @@ $('done').onclick = async () => {
   $('done').disabled = true
   stage = 'sending'; ping()
   if (liveId) {
+    // закрываем скан, только когда компьютер получил все кадры: иначе облако соберётся из части
     $('say').textContent = 'Отправляю остаток…'
-    while (uploading) await new Promise(r => setTimeout(r, 200))
-    await pump()
-    try {
-      const r = await fetch(`live/${liveId}/finish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-      if (r.ok) { liveId = null; watchBuild((await r.json()).id); return }
-    } catch {}
+    let sent = false
+    for (let k = 0; k < 6 && !sent; k++) {
+      while (uploading) await new Promise(r => setTimeout(r, 200))
+      sent = await pump()
+      if (!sent) await new Promise(r => setTimeout(r, 1500))
+    }
+    if (sent) {
+      try {
+        const r = await fetch(`live/${liveId}/finish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        if (r.ok) { liveId = null; watchBuild((await r.json()).id); return }
+      } catch {}
+    }
+    const left = frames.filter(f => f.state === 'queued').length
+    note(left ? `Не ушло ${left} кадров — проверь Wi-Fi и нажми «Готово» ещё раз` : 'Компьютер не ответил — нажми «Готово» ещё раз', 'bad')
+    $('say').textContent = 'Не закончено'
+    window.addEventListener('deviceorientation', onOrient)
+    stage = 'scan'
+    $('done').disabled = false
+    return
   }
   // без компьютера — файлом: поделиться или скачать
   const ceiling = parseFloat(($('ceiling').value || '').replace(',', '.'))
@@ -449,6 +466,7 @@ $('done').onclick = async () => {
   if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return } catch {} }
   const a = document.createElement('a')
   a.href = URL.createObjectURL(file); a.download = name; a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000)
 }
 </script>
 </body>

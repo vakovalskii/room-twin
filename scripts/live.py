@@ -27,6 +27,7 @@ HFOV = 69.0
 DARK = 45       # средняя яркость 0..255: ниже — просим фонарик
 BLUR = 12       # дисперсия лапласиана на 360×640: ниже — кадр смазан (резкие кадры 30–300)
 MIN_OVERLAP = 0.2
+MAX_FRAMES = 400  # кадров на один скан
 
 
 def best_overlap(item: dict, near: list[dict], cam_h: float, ceiling: float) -> float:
@@ -59,19 +60,31 @@ class LiveScan:
         self.size = None
         self.lock = threading.Lock()
         self.q: queue.Queue = queue.Queue()
+        self.closed = False
+        self.capture: Path | None = None
+        self._since_plan = 0
         (out / "frames").mkdir(parents=True, exist_ok=True)
         (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
         threading.Thread(target=self._worker, daemon=True).start()
 
     def add(self, fr: dict) -> int:
+        """Кадр с телефона: на диск и в очередь — атомарно, чтобы finish() не проскочил между ними."""
+        jpeg = base64.b64decode(fr.pop("jpeg").split(",", 1)[1])
         with self.lock:
+            if self.closed:
+                raise ScanClosed("съёмка уже закончена")
+            if len(self.frames) >= MAX_FRAMES:
+                raise ScanClosed(f"больше {MAX_FRAMES} кадров на скан не принимаем")
             i = len(self.frames)
-            jpeg = fr.pop("jpeg")
-            (self.out / "frames" / f"{i:03d}.jpg").write_bytes(base64.b64decode(jpeg.split(",", 1)[1]))
+            (self.out / "frames" / f"{i:03d}.jpg").write_bytes(jpeg)
             fr.update(i=i, state="queued")
             self.frames.append(fr)
-        self.q.put(i)
+            self.q.put(i)
         return i
+
+    def _set(self, i: int, **kw):
+        with self.lock:
+            self.frames[i].update(kw)
 
     def state(self) -> dict:
         with self.lock:
@@ -82,10 +95,15 @@ class LiveScan:
     def _worker(self):
         while True:
             i = self.q.get()
+            if i is None:  # finish(): поток выходит, тяжёлые массивы освобождаем
+                self.q.task_done()
+                with self.lock:
+                    self.cloud.clear()
+                return
             try:
                 self._process(i)
             except Exception as e:  # кадр не должен ронять сессию
-                self.frames[i].update(state="bad", reason=f"ошибка: {e}")
+                self._set(i, state="bad", reason=f"ошибка: {e}")
             finally:
                 self.q.task_done()
 
@@ -93,19 +111,23 @@ class LiveScan:
         fr = self.frames[i]
         img = Image.open(self.out / "frames" / f"{i:03d}.jpg").convert("RGB")
         g = np.asarray(img.convert("L").resize((360, 640) if img.height > img.width else (640, 360)), np.float32)
+        tip = "темновато — включи фонарик" if g.mean() < DARK else None
+        if sharpness(g) < BLUR:  # дешёвая проверка — до нейросети
+            self._set(i, state="bad", reason="смазано — замри перед кадром", tip=tip)
+            return
         d = cached_depth(self.sess, img, self.out / "depth" / f"{i:03d}.npy")
         cam, vs, us = to_cam(d, focal_px(*img.size, HFOV), step=6)
         item = {"i": i, "yaw": fr["yaw"], "pitch": fr["pitch"], "scale": 1.0, "cam": cam,
                 "ok": clean_mask(d)[vs, us], "rgb": np.asarray(img)[vs, us]}
-        fr["tip"] = "темновато — включи фонарик" if g.mean() < DARK else None
-        if sharpness(g) < BLUR:
-            fr.update(state="bad", reason="смазано — замри перед кадром")
-            return
-        fr.update(state="ok", reason=None)
+        self._set(i, state="ok", reason=None, tip=tip)
         with self.lock:
             self.cloud[i] = item
         cam_h = self._check_all()
-        self._replan(cam_h)
+        # план и облако для страницы — когда очередь разобрана или раз в 4 кадра, а не после каждого
+        self._since_plan += 1
+        if self.q.qsize() == 0 or self._since_plan >= 4:
+            self._since_plan = 0
+            self._replan(cam_h)
 
     def _check_all(self) -> float:
         """Кадр сверяем со стенами принятых соседей (±30° по курсу). Мало соседей — кадр пока принят;
@@ -129,10 +151,10 @@ class LiveScan:
                 continue
             it["seen"] = len(near)
             if best_overlap(it, near, cam_h, ceiling) >= MIN_OVERLAP:
-                self.frames[it["i"]].update(state="ok", reason=None)
+                self._set(it["i"], state="ok", reason=None)
                 it["confirmed"] = len(near) >= 3
             else:
-                self.frames[it["i"]].update(state="bad", reason="не совпал с соседними кадрами (человек, пол, предмет вплотную?) — сними это направление ещё раз")
+                self._set(it["i"], state="bad", reason="не совпал с соседними кадрами (человек, пол, предмет вплотную?) — сними это направление ещё раз")
         return cam_h
 
     def _replan(self, cam_h: float):
@@ -162,8 +184,13 @@ class LiveScan:
             self.plan_png, self.size, self.cloud_bin = buf.getvalue(), size, cloud
             self.plan_ver += 1
 
-    def finish(self, captures: Path) -> Path:
-        """Собирает обычный файл скана (тот же формат, что и выгрузка целиком) — дальше работает cloud.py."""
+    def finish(self, captures: Path) -> tuple[Path, bool]:
+        """Закрывает приём, дожидается обработки и пишет обычный файл скана. Повторный вызов —
+        тот же файл и False (сборку второй раз не запускать)."""
+        with self.lock:
+            if self.capture:
+                return self.capture, False
+            self.closed = True
         self.q.join()
         frames = []
         for f in self.frames:
@@ -173,14 +200,23 @@ class LiveScan:
                "live_bad": [f["i"] for f in self.frames if f.get("state") == "bad"]}
         path = captures / f"room-capture-{self.sid}.json"
         path.write_text(json.dumps(cap, ensure_ascii=False))
-        return path
+        self.capture = path
+        self.q.put(None)  # отпускаем поток обработки
+        return path, True
+
+
+class ScanClosed(Exception):
+    pass
 
 
 _SESS = None
+_SESS_LOCK = threading.Lock()
 
 
 def session() -> ort.InferenceSession:
+    """Одна сессия ONNX на процесс: два одновременных старта не грузят модель дважды."""
     global _SESS
-    if _SESS is None:
-        _SESS = ort.InferenceSession(str(MODEL), providers=["CPUExecutionProvider"])
+    with _SESS_LOCK:
+        if _SESS is None:
+            _SESS = ort.InferenceSession(str(MODEL), providers=["CPUExecutionProvider"])
     return _SESS

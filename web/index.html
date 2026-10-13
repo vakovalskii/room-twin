@@ -143,7 +143,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 const $ = id => document.getElementById(id)
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const SAFE = /^[A-Za-z0-9_-]{1,64}$/  // id сканов — только такие; остальное не показываем
+const enc = encodeURIComponent
 const ROWS = { mid: ['прямо', 24], low: ['вниз', 12], high: ['вверх', 12] }
 const STAGE = { start: 'открыл страницу', scan: 'снимает', sending: 'отправляет', done: 'закончил' }
 const BUILD = { building: 'собираю облако…', done: 'облако готово', error: 'сборка упала' }
@@ -179,16 +181,22 @@ const cloudView = (() => {
   const me = new THREE.Mesh(new THREE.SphereGeometry(0.07), new THREE.MeshBasicMaterial({ color: 0xff7a00 }))
   me.position.y = 1.0
   scene.add(me)
-  let points = null, ver = null
+  let points = null, ver = null, gen = 0
   function resize() {
     const w = box.clientWidth || 600, h = box.clientHeight || 420
     renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix()
   }
   async function load(id, v) {
-    if (v === ver || !v) return
-    ver = v
-    const buf = await (await fetch(`live/${id}/cloud.bin`, { cache: 'no-store' })).arrayBuffer().catch(() => null)
-    if (!buf || buf.byteLength < 4) return
+    const key = `${id}:${v}`
+    if (key === ver || !v || !SAFE.test(id)) return
+    const my = ++gen  // ответ старого запроса после переключения скана не должен подменить новое облако
+    let buf = null
+    try {
+      const r = await fetch(`live/${enc(id)}/cloud.bin`, { cache: 'no-store' })
+      if (r.ok) buf = await r.arrayBuffer()
+    } catch {}
+    if (my !== gen || !buf || buf.byteLength < 4) return
+    ver = key  // версию запоминаем только после успеха — иначе неудачная больше не запросится
     const n = new DataView(buf).getUint32(0, true)
     const xyz = new Float32Array(buf, 4, n * 3), rgb = new Uint8Array(buf, 4 + n * 12, n * 3)
     const pos = new Float32Array(n * 3), col = new Float32Array(n * 3)
@@ -199,14 +207,14 @@ const cloudView = (() => {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
-    if (points) { scene.remove(points); points.geometry.dispose() }
+    if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose() }
     points = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.03, vertexColors: true }))
     scene.add(points)
     box.querySelector('.cap').textContent = `${n.toLocaleString('ru')} точек · обновлено ${new Date().toLocaleTimeString('ru')}`
   }
   renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera) })
   addEventListener('resize', resize)
-  return { box, load, resize, reset: () => { ver = null; if (points) { scene.remove(points); points = null } } }
+  return { box, load, resize, reset: () => { ver = null; gen++; if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose(); points = null } } }
 })()
 
 // ── статус ─────────────────────────────────────────────────────────────
@@ -234,9 +242,9 @@ function liveCard(s) {
     return `<div class="bar"><span>${name}</span><div><i style="width:${Math.min(100, got / n * 100)}%"></i></div><span class="dim">${got}/${n}</span></div>`
   }).join('')
   const frames = s.frames.slice().reverse().map(f => `<div class="fr ${f.state}" title="${esc(f.reason || f.tip || '')}">
-      <img loading="lazy" src="out/${s.id}/frames/${String(f.i).padStart(3, '0')}.jpg"><span class="n">#${f.i}</span>
+      <img loading="lazy" src="out/${enc(s.id)}/frames/${String(+f.i).padStart(3, '0')}.jpg"><span class="n">#${+f.i}</span>
       ${f.reason ? `<span class="r">${esc(f.reason.split(' — ')[0])}</span>` : ''}</div>`).join('')
-  const plan = s.build === 'done' ? `out/${s.id}/plan_room.png` : `live/${s.id}/plan.png?v=${s.plan_ver}`
+  const plan = s.build === 'done' ? `out/${enc(s.id)}/plan_room.png` : `live/${enc(s.id)}/plan.png?v=${+s.plan_ver}`
   return `<div class="head">
       <h2>${esc(s.room)}</h2><span class="dim">${esc(s.id)}</span>
       <span class="pill">${s.build ? esc(BUILD[s.build] || s.build) : 'идёт съёмка'}</span>
@@ -244,7 +252,7 @@ function liveCard(s) {
       <span class="pill" style="color:var(--wait)">считается ${wait}</span>
       <span class="pill" style="color:var(--bad)">брак ${bad}</span>
       ${s.size ? `<span class="pill">≈ ${s.size[0]} × ${s.size[1]} м</span>` : ''}
-      ${s.build === 'done' ? `<a class="btn" href="#room/${s.id}/cloud">3D-облако целиком</a>` : ''}
+      ${s.build === 'done' ? `<a class="btn" href="#room/${enc(s.id)}/cloud">3D-облако целиком</a>` : ''}
     </div>
     <div class="live-grid">
       <div id="cloudslot"></div>
@@ -259,7 +267,7 @@ function liveCard(s) {
 let lastLive = ''
 function renderStatus() {
   steps()
-  const s = data.live[0]
+  const s = data.live.find(x => SAFE.test(x.id))
   if (!s) {
     if (lastLive !== 'none') $('live').innerHTML = '<div class="card"><div class="empty">Живой съёмки нет. Открой на телефоне адрес со вкладки «Телефон» и нажми «Начать».</div></div>'
     lastLive = 'none'
@@ -283,18 +291,18 @@ function renderStatus() {
 // ── комнаты ────────────────────────────────────────────────────────────
 let lastRooms = ''
 function renderRooms() {
-  const html = data.done.map(d => {
+  const html = data.done.filter(d => SAFE.test(d.id)).map(d => {
     const has = f => d.files.includes(f)
-    const thumb = has('plan_room.png') ? `out/${d.id}/plan_room.png` : ''
+    const thumb = has('plan_room.png') ? `out/${enc(d.id)}/plan_room.png` : ''
     return `<div class="room">
       <div class="thumb" style="${thumb ? `background-image:url('${thumb}')` : ''}"></div>
       <div class="body">
         <b>${esc(d.room || 'Без названия')}</b><span class="dim">${esc(d.id)} · ${has('room.html') ? 'двойник готов' : has('cloud.html') ? 'облако есть, двойника ещё нет' : esc(BUILD[d.build] || 'нет результатов')}</span>
         <div class="btns">
-          ${has('room.html') ? `<a class="primary" href="#room/${d.id}/editor">Редактор</a>` : ''}
-          ${has('cloud.html') ? `<a href="#room/${d.id}/cloud">Облако</a>` : ''}
-          ${has('plan_room.png') ? `<a href="#room/${d.id}/plan">План</a>` : ''}
-          ${has('sheet.jpg') ? `<a href="#room/${d.id}/sheet">Кадры</a>` : ''}
+          ${has('room.html') ? `<a class="primary" href="#room/${enc(d.id)}/editor">Редактор</a>` : ''}
+          ${has('cloud.html') ? `<a href="#room/${enc(d.id)}/cloud">Облако</a>` : ''}
+          ${has('plan_room.png') ? `<a href="#room/${enc(d.id)}/plan">План</a>` : ''}
+          ${has('sheet.jpg') ? `<a href="#room/${enc(d.id)}/sheet">Кадры</a>` : ''}
         </div>
       </div></div>`
   }).join('') || '<div class="empty">Пока ничего не отснято</div>'
@@ -302,12 +310,13 @@ function renderRooms() {
 }
 
 function openRoom(id, tab) {
+  if (!SAFE.test(id || '')) { location.hash = '#rooms'; return }
   const d = data.done.find(x => x.id === id) || { id, files: ['room.html', 'cloud.html', 'plan_room.png', 'sheet.jpg'] }
   const tabs = [['editor', 'Редактор', 'room.html'], ['cloud', 'Облако точек', 'cloud.html'], ['plan', 'План', 'plan_room.png'], ['sheet', 'Кадры', 'sheet.jpg']]
   $('roomsub').innerHTML = `<a class="back" href="#rooms">← Комнаты</a><b style="margin-right:10px">${esc(d.room || id)}</b>` +
-    tabs.filter(t => d.files.includes(t[2])).map(([k, n]) => `<a href="#room/${id}/${k}" class="${k === tab ? 'on' : ''}">${n}</a>`).join('')
+    tabs.filter(t => d.files.includes(t[2])).map(([k, n]) => `<a href="#room/${enc(id)}/${k}" class="${k === tab ? 'on' : ''}">${n}</a>`).join('')
   const file = tabs.find(t => t[0] === tab)?.[2] || 'room.html'
-  const src = `out/${id}/${file}`
+  const src = `out/${enc(id)}/${file}`
   const cur = $('roomframe').firstElementChild
   if (cur?.getAttribute('src') === src) return
   $('roomframe').innerHTML = file.endsWith('.html') ? `<iframe src="${src}"></iframe>` : `<img src="${src}" alt="">`
@@ -330,7 +339,7 @@ async function tick() {
     data = await (await fetch('api/sessions', { cache: 'no-store' })).json()
     renderPhone(); renderStatus(); renderRooms()
   } catch {}
-  setTimeout(tick, 1000)
+  setTimeout(tick, document.hidden ? 5000 : 1000)
 }
 route()
 tick()

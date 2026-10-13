@@ -277,9 +277,17 @@ function wallsOf() {
 function dropLabels(obj) {
   obj.traverse(x => { if (x.isCSS2DObject && x.element.parentNode) x.element.parentNode.removeChild(x.element) })
 }
+// убранное со сцены освобождаем на видеокарте: геометрии, материалы, текстуры
+function dispose(obj) {
+  dropLabels(obj)
+  obj.traverse(x => {
+    x.geometry?.dispose()
+    for (const m of [].concat(x.material || [])) { m.map?.dispose(); m.dispose() }
+  })
+}
 
 function buildShell() {
-  dropLabels(shell)
+  dispose(shell)
   scene.remove(shell)
   shell = new THREE.Group()
   scene.add(shell)
@@ -324,12 +332,15 @@ function buildShell() {
       const tag = label(`${o.id}${o.leads_to ? ' — ' + o.leads_to : ''}`, at(along, o.elevation + o.h + 0.12), 'tag', g)
       tag.element.style.pointerEvents = 'auto'; tag.element.style.cursor = 'pointer'
       tag.element.onclick = () => selectOpening(o.src)
+      const og = new THREE.Group()  // своя группа на каждый проём: клик по стеклу или полотну выбирает именно его
+      og.userData.opening = o.src
+      g.add(og)
       if (o.type === 'window') {
         const glass = new THREE.Mesh(new THREE.PlaneGeometry(ow, o.h),
           new THREE.MeshStandardMaterial({ color: '#cfe3ee', transparent: true, opacity: 0.45, side: THREE.DoubleSide }))
         glass.position.copy(at(along, o.elevation + o.h / 2)); glass.rotation.y = ang
-        g.add(glass)
-        const sill = box(ow + 0.06, 0.03, T + 0.08, '#f4f3ef', 0, o.elevation - 0.03, 0, g)
+        og.add(glass)
+        const sill = box(ow + 0.06, 0.03, T + 0.08, '#f4f3ef', 0, o.elevation - 0.03, 0, og)
         sill.position.x = at(along).x - wall.n[0] * T / 2; sill.position.z = at(along).z + wall.n[1] * T / 2; sill.rotation.y = ang
       }
       if (o.type === 'door') {
@@ -340,9 +351,8 @@ function buildShell() {
         leaf.position.z = 0
         const pivot = new THREE.Group(); pivot.add(leaf); hinge.add(pivot)
         pivot.rotation.y = -(o.open ?? 25) * Math.PI / 180 * (wall.n[0] + wall.n[1] < 0 ? -1 : 1)
-        g.add(hinge)
+        og.add(hinge)
       }
-      for (const m of g.children) if (m.isMesh && !m.userData.full) m.userData.opening = o.src
     }
     const tag = label(`W0${k + 1}`, P((wall.a[0] + wall.b[0]) / 2, (wall.a[1] + wall.b[1]) / 2, H + 0.35), 'tag', g)
     shell.add(g)
@@ -375,7 +385,7 @@ function cutaway() {
     // постеры, шторы и прочее на опущенной стене не должны висеть в воздухе
     for (const [, obj] of meshesById) {
       const o = obj.userData.o
-      if (o.wall === wall.id && (o.mount === 'wall' || o.category === 'curtain') && camera !== ortho) obj.visible = !facing
+      if (o.wall === wall.id && (o.mount === 'wall' || o.category === 'curtain')) obj.visible = camera === ortho || !facing
     }
   }
 }
@@ -653,15 +663,17 @@ function showGhost(wall, x, y) {
 function hideGhost() { ghost.visible = false; if (ghostTag) ghostTag.visible = false }
 const OPENINGS = [['door', 'Дверь', 0.85, 2.05, 0], ['window', 'Окно', 1.4, 1.4, 0.85], ['arch', 'Проём / арка', 1.0, 2.1, 0]]
 
+let revision = 0
 function markDirty() {
   dirty = true
+  revision++
   document.getElementById('savestate').textContent = 'есть несохранённые изменения'
 }
 
 function rebuild(o) {
   const old = meshesById.get(o.id)
   if (old) {
-    dropLabels(old)
+    dispose(old)
     scene.remove(old)
     for (let k = lights.length - 1; k >= 0; k--) if (lights[k].o === o) lights.splice(k, 1)
   }
@@ -673,7 +685,7 @@ function rebuild(o) {
 
 let selBox = null, sizeTag = null
 function highlight() {
-  if (selBox) { scene.remove(selBox); selBox = null }
+  if (selBox) { scene.remove(selBox); selBox.geometry?.dispose(); selBox.material?.dispose(); selBox = null }
   if (sizeTag) { sizeTag.element.remove(); scene.remove(sizeTag); sizeTag = null }
   if (selectedWall) {
     attachGizmo()
@@ -882,6 +894,9 @@ for (const [group, items] of Object.entries(CATALOG)) {
 }
 
 const cm = m => Math.round(m * 100)
+// всё, что пришло из room.json или от пользователя, в HTML — только через esc(): имя «<img onerror=…>» не выполнится
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const safeColor = c => /^#[0-9a-f]{3,8}$/i.test(String(c)) ? c : '#8a8a80'
 const num = (v, def = 0) => { const x = parseFloat(String(v).replace(',', '.')); return Number.isFinite(x) ? x : def }
 function renderProps() {
   const el = document.getElementById('props')
@@ -894,19 +909,19 @@ function renderProps() {
     return
   }
   if (!o) return renderRoom(el)
-  document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
+  document.getElementById('seltitle').innerHTML = `Свойства <small>${esc(o.id)} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
   const cats = [...new Set([o.category, ...Object.keys(CATEGORY_NAMES)])]
   el.innerHTML = `<div class="form">
-    <label>Название</label><input data-k="name" value="${(o.name || '').replace(/"/g, '&quot;')}">
-    <label>Тип</label><select data-k="category">${cats.map(c => `<option value="${c}" ${c === o.category ? 'selected' : ''}>${CATEGORY_NAMES[c] || c}</option>`).join('')}</select>
+    <label>Название</label><input data-k="name" value="${esc(o.name)}">
+    <label>Тип</label><select data-k="category">${cats.map(c => `<option value="${esc(c)}" ${c === o.category ? 'selected' : ''}>${esc(CATEGORY_NAMES[c] || c)}</option>`).join('')}</select>
     <label>Ш × Г × В, см</label><div class="nums"><input data-k="w" value="${cm(o.w)}"><input data-k="d" value="${cm(o.d)}"><input data-k="h" value="${cm(o.h)}"><span></span></div>
     <label>Над полом, см</label><input data-k="elevation" value="${cm(o.elevation || 0)}">
     <label>X, Y, м</label><div class="nums"><input data-k="x" value="${(+o.x).toFixed(2)}"><input data-k="y" value="${(+o.y).toFixed(2)}"><span></span><span></span></div>
     <label>Спиной к стене</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === o.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
     <label>Крепление</label><select data-k="mount">${['floor', 'wall', 'ceiling'].map(m => `<option value="${m}" ${m === o.mount ? 'selected' : ''}>${{ floor: 'пол', wall: 'стена', ceiling: 'потолок' }[m]}</option>`).join('')}</select>
     <label>Цвет</label><input type="color" data-k="color" value="${/^#[0-9a-f]{6}$/i.test(o.color) ? o.color : '#8a8a80'}">
-    <label>Электроприбор</label><div><input type="checkbox" data-k="electric" ${o.electric ? 'checked' : ''}> <span class="dim">мощность</span> <input data-k="power_w" value="${o.power_w || ''}" placeholder="Вт" style="width:80px"></div>
-    <label>Заметка</label><input data-k="note" value="${(o.note || '').replace(/"/g, '&quot;')}" placeholder="например: на отдельной линии">
+    <label>Электроприбор</label><div><input type="checkbox" data-k="electric" ${o.electric ? 'checked' : ''}> <span class="dim">мощность</span> <input data-k="power_w" value="${esc(o.power_w || '')}" placeholder="Вт" style="width:80px"></div>
+    <label>Заметка</label><input data-k="note" value="${esc(o.note)}" placeholder="например: на отдельной линии">
   </div>
   <div class="acts"><button data-a="rot">⟳ Повернуть</button><button data-a="dup">Копия</button><button data-a="del" class="danger">Удалить</button></div>`
   el.querySelectorAll('[data-k]').forEach(inp => {
@@ -919,7 +934,7 @@ function renderProps() {
       else o[k] = inp.value
       constrain(o, 0)
       rebuild(o); renderList(); markDirty()
-      document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
+      document.getElementById('seltitle').innerHTML = `Свойства <small>${esc(o.id)} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
     }
   })
   el.querySelector('[data-a=rot]').onclick = () => rotate(o)
@@ -937,13 +952,13 @@ function bindForm(el, apply) {
 function renderRoom(el) {
   document.getElementById('seltitle').innerHTML = 'Комната <small>выбери предмет или проём, чтобы править его</small>'
   el.innerHTML = `<div class="form">
-    <label>Название</label><input data-k="name" value="${(room.name || '').replace(/"/g, '&quot;')}">
+    <label>Название</label><input data-k="name" value="${esc(room.name)}">
     <label>Ш × Г × В, м</label><div class="nums"><input data-k="width" value="${W}"><input data-k="depth" value="${D}"><input data-k="height" value="${H}"><span></span></div>
     <label>Цвет стен</label><input type="color" data-k="wall_color" value="${room.wall_color || '#ede9e0'}">
     <label>Пол</label><select data-k="floor">${Object.entries(FLOORS).map(([k, f]) => `<option value="${k}" ${k === (room.floor || 'planks') ? 'selected' : ''}>${f.name}</option>`).join('')}</select>
   </div>
   <div class="acts"><button data-a="norm">⤓ Выровнять всё по полу и стенам</button></div>
-  <div class="kbd">Кликни стену в 3D — появится стрелка, тяни её, чтобы менять размер комнаты.<br>Проёмы: ${room.openings.map(o => `<a href="#" data-op="${o.id}">${o.id} ${{ door: 'дверь', window: 'окно', arch: 'арка' }[o.type] || o.type}</a>`).join(' · ') || 'нет'}</div>`
+  <div class="kbd">Кликни стену в 3D — появится стрелка, тяни её, чтобы менять размер комнаты.<br>Проёмы: ${room.openings.map(o => `<a href="#" data-op="${esc(o.id)}">${esc(o.id)} ${esc({ door: 'дверь', window: 'окно', arch: 'арка' }[o.type] || o.type)}</a>`).join(' · ') || 'нет'}</div>`
   el.querySelectorAll('[data-op]').forEach(a => a.onclick = e => { e.preventDefault(); selectOpening(room.openings.find(o => o.id === a.dataset.op)) })
   el.querySelector('[data-a=norm]').onclick = normalizeAll
   bindForm(el, (k, v) => {
@@ -963,7 +978,7 @@ function renderRoom(el) {
 function renderOpening(el) {
   const op = selectedOp
   const along = op.wall === 'N' || op.wall === 'S' ? 'x' : 'y'
-  document.getElementById('seltitle').innerHTML = `Проём <small>${op.id} · ${cm(op.w)} × ${cm(op.h)} см · тащи по стене мышью</small>`
+  document.getElementById('seltitle').innerHTML = `Проём <small>${esc(op.id)} · ${cm(op.w)} × ${cm(op.h)} см · тащи по стене мышью</small>`
   el.innerHTML = `<div class="form">
     <label>Тип</label><select data-k="type">${OPENINGS.map(([t, n]) => `<option value="${t}" ${t === op.type ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <label>Стена</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === op.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
@@ -971,7 +986,7 @@ function renderOpening(el) {
     <label>Ширина × высота, см</label><div class="nums"><input data-k="w" value="${cm(op.w)}"><input data-k="h" value="${cm(op.h)}"><span></span><span></span></div>
     <label>От пола, см</label><input data-k="elevation" value="${cm(op.elevation || 0)}">
     ${op.type === 'door' ? `<label>Открыта на, °</label><input data-k="open" value="${op.open ?? 25}">` : ''}
-    <label>Куда ведёт</label><input data-k="leads_to" value="${op.leads_to || ''}" placeholder="коридор, балкон…">
+    <label>Куда ведёт</label><input data-k="leads_to" value="${esc(op.leads_to)}" placeholder="коридор, балкон…">
   </div>
   <div class="acts"><button data-a="del" class="danger">Удалить проём</button><button data-a="back">← Комната</button></div>`
   bindForm(el, (k, v) => {
@@ -1053,7 +1068,7 @@ function renderList() {
   for (const o of room.objects) {
     const el = document.createElement('div')
     el.className = 'item' + (o === selected ? ' sel' : '')
-    el.innerHTML = `<span class="sw" style="background:${o.color}"></span>${o.electric ? '<span class="el">⚡</span> ' : ''}${o.name}<small>${o.id} · ${cm(o.w)}×${cm(o.d)}×${cm(o.h)} см${o.power_w ? ' · ' + o.power_w + ' Вт' : ''}${o.note ? ' · ' + o.note : ''}</small>`
+    el.innerHTML = `<span class="sw" style="background:${safeColor(o.color)}"></span>${o.electric ? '<span class="el">⚡</span> ' : ''}${esc(o.name)}<small>${esc(o.id)} · ${cm(o.w)}×${cm(o.d)}×${cm(o.h)} см${o.power_w ? ' · ' + esc(o.power_w) + ' Вт' : ''}${o.note ? ' · ' + esc(o.note) : ''}</small>`
     el.onclick = () => select(o)
     list.appendChild(el)
   }
@@ -1066,7 +1081,7 @@ renderProps()
 
 // мышь: клик — выбрать, перетаскивание выбранного — двигать по полу
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-let drag = null, downAt = null
+let drag = null, downAt = null, shellQueued = false
 function pick(ev) {
   const r = renderer.domElement.getBoundingClientRect()
   ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1)
@@ -1115,7 +1130,8 @@ renderer.domElement.addEventListener('pointermove', ev => {
     const op = drag.op, half = op.w / 2
     if (op.wall === 'N' || op.wall === 'S') op.x = Math.min(W - half, Math.max(half, f.x))
     else op.y = Math.min(D - half, Math.max(half, f.y))
-    buildShell(); highlight()
+    // стены перестраиваем не чаще кадра отрисовки, а не на каждое движение мыши
+    if (!shellQueued) { shellQueued = true; requestAnimationFrame(() => { shellQueued = false; buildShell(); highlight() }) }
     return
   }
   const o = drag.o
@@ -1167,14 +1183,17 @@ function download() {
   a.href = URL.createObjectURL(new Blob([roomJson()], { type: 'application/json' }))
   a.download = 'room.json'
   a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000)
 }
 async function save() {
   const st = document.getElementById('savestate')
+  const sent = revision
   try {
     const r = await fetch(location.pathname.replace(/[^/]*$/, 'room.json'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: roomJson() })
     if (!r.ok) throw new Error(r.status)
-    dirty = false
-    st.textContent = `сохранено ${new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}`
+    // пока ответ шёл, могли поправить ещё — тогда несохранённое остаётся несохранённым
+    if (revision === sent) dirty = false
+    st.textContent = dirty ? 'есть изменения новее сохранённых' : `сохранено ${new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}`
   } catch {
     st.textContent = 'сервера нет — скачай файл'
     download()
