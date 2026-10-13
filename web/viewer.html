@@ -671,9 +671,10 @@ function rebuild(o) {
   highlight()
 }
 
-let selBox = null
+let selBox = null, sizeTag = null
 function highlight() {
   if (selBox) { scene.remove(selBox); selBox = null }
+  if (sizeTag) { sizeTag.element.remove(); scene.remove(sizeTag); sizeTag = null }
   if (selectedWall) {
     attachGizmo()
     const a = { N: [0, D, W, D], S: [0, 0, W, 0], E: [W, 0, W, D], W: [0, 0, 0, D] }[selectedWall]
@@ -691,8 +692,11 @@ function highlight() {
   }
   attachGizmo()
   const g = selected && meshesById.get(selected.id)
+  if (sizeTag) { sizeTag.element.remove(); scene.remove(sizeTag); sizeTag = null }
   if (!g) return
   selBox = new THREE.BoxHelper(g, 0x2f8f4a)
+  const top = new THREE.Box3().setFromObject(g)
+  sizeTag = label(`${cm(selected.w)} × ${cm(selected.d)} × ${cm(selected.h)} см`, new THREE.Vector3((top.min.x + top.max.x) / 2, top.max.y + 0.25, (top.min.z + top.max.z) / 2), 'tag elec')
   scene.add(selBox)
 }
 
@@ -760,7 +764,9 @@ gizmo.addEventListener('objectChange', () => {
   selBox?.update?.()
   if (selected && gizmoMode === 'scale' && !selectedWall) {
     const g = meshesById.get(selected.id)
-    document.getElementById('seltitle').innerHTML = `Свойства <small>${(selected.w * g.scale.x).toFixed(2)} × ${(selected.d * g.scale.z).toFixed(2)} × ${(selected.h * g.scale.y).toFixed(2)} м</small>`
+    const t = `${cm(selected.w * g.scale.x)} × ${cm(selected.d * g.scale.z)} × ${cm(selected.h * g.scale.y)} см`
+    document.getElementById('seltitle').innerHTML = `Свойства <small>${t}</small>`
+    if (sizeTag) sizeTag.element.textContent = t
   }
   if (selectedWall) {
     const x = wallHandle.position.x, y = -wallHandle.position.z
@@ -784,6 +790,14 @@ function attachGizmo() {
 // стену тянут за стрелку: восточная и северная меняют ширину/глубину, западная и южная ещё и сдвигают всё внутри
 function resizeByWall(wall) {
   const p = wallHandle.position, x = p.x, y = -p.z
+  const W0 = W, D0 = D
+  // со стеной едет только то, что стоит к ней вплотную (зазор < 15 см) или висит на ней; остальное — на месте
+  const flush = o => {
+    if (o.mount === 'wall') return o.wall === wall
+    const [hx, hy] = footprint(o)
+    return { E: W0 - (o.x + hx), W: o.x - hx, N: D0 - (o.y + hy), S: o.y - hy }[wall] < 0.15
+  }
+  const moving = new Set(room.objects.filter(flush))
   let dx = 0, dy = 0
   if (wall === 'E') room.size.width = Math.max(1, +x.toFixed(2))
   if (wall === 'N') room.size.depth = Math.max(1, +y.toFixed(2))
@@ -796,12 +810,14 @@ function resizeByWall(wall) {
     op.x = Math.min(W, Math.max(0, op.x)); op.y = Math.min(D, Math.max(0, op.y))
   }
   for (const o of room.objects) {
-    o.x -= dx; o.y -= dy
-    // то, что стояло у сдвинутой стены, едет вместе с ней
-    if (o.wall === wall && (o.mount === 'wall' || AGAINST.has(o.category))) {
-      if (wall === 'E') o.x = W; if (wall === 'N') o.y = D; if (wall === 'W') o.x = 0; if (wall === 'S') o.y = 0
+    if (moving.has(o)) {
+      // едет со стеной: западная/южная стена сдвигает начало координат, поэтому x/y у них не меняются
+      if (wall === 'E') o.x += W - W0
+      if (wall === 'N') o.y += D - D0
+    } else {
+      o.x -= dx; o.y -= dy
     }
-    constrain(o, 0)
+    constrain(o, -1)  // только не дать вылезти за стены, без прилипания
   }
   buildShell()
   for (const o of room.objects) rebuild(o)
@@ -865,6 +881,7 @@ for (const [group, items] of Object.entries(CATALOG)) {
   palette.appendChild(box_)
 }
 
+const cm = m => Math.round(m * 100)
 const num = (v, def = 0) => { const x = parseFloat(String(v).replace(',', '.')); return Number.isFinite(x) ? x : def }
 function renderProps() {
   const el = document.getElementById('props')
@@ -877,13 +894,13 @@ function renderProps() {
     return
   }
   if (!o) return renderRoom(el)
-  document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id}</small>`
+  document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
   const cats = [...new Set([o.category, ...Object.keys(CATEGORY_NAMES)])]
   el.innerHTML = `<div class="form">
     <label>Название</label><input data-k="name" value="${(o.name || '').replace(/"/g, '&quot;')}">
     <label>Тип</label><select data-k="category">${cats.map(c => `<option value="${c}" ${c === o.category ? 'selected' : ''}>${CATEGORY_NAMES[c] || c}</option>`).join('')}</select>
-    <label>Ш × Г × В, м</label><div class="nums"><input data-k="w" value="${o.w}"><input data-k="d" value="${o.d}"><input data-k="h" value="${o.h}"><span></span></div>
-    <label>Над полом, м</label><input data-k="elevation" value="${o.elevation || 0}">
+    <label>Ш × Г × В, см</label><div class="nums"><input data-k="w" value="${cm(o.w)}"><input data-k="d" value="${cm(o.d)}"><input data-k="h" value="${cm(o.h)}"><span></span></div>
+    <label>Над полом, см</label><input data-k="elevation" value="${cm(o.elevation || 0)}">
     <label>X, Y, м</label><div class="nums"><input data-k="x" value="${(+o.x).toFixed(2)}"><input data-k="y" value="${(+o.y).toFixed(2)}"><span></span><span></span></div>
     <label>Спиной к стене</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === o.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
     <label>Крепление</label><select data-k="mount">${['floor', 'wall', 'ceiling'].map(m => `<option value="${m}" ${m === o.mount ? 'selected' : ''}>${{ floor: 'пол', wall: 'стена', ceiling: 'потолок' }[m]}</option>`).join('')}</select>
@@ -895,12 +912,14 @@ function renderProps() {
   el.querySelectorAll('[data-k]').forEach(inp => {
     inp.onchange = () => {
       const k = inp.dataset.k
-      if (['w', 'd', 'h', 'elevation', 'x', 'y'].includes(k)) o[k] = num(inp.value, o[k])
+      if (['w', 'd', 'h', 'elevation'].includes(k)) o[k] = Math.max(0, num(inp.value, o[k] * 100) / 100)  // в форме — см
+      else if (k === 'x' || k === 'y') o[k] = num(inp.value, o[k])
       else if (k === 'power_w') o.power_w = num(inp.value) || undefined
       else if (k === 'electric') o.electric = inp.checked
       else o[k] = inp.value
       constrain(o, 0)
       rebuild(o); renderList(); markDirty()
+      document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id} · ${cm(o.w)} × ${cm(o.d)} × ${cm(o.h)} см</small>`
     }
   })
   el.querySelector('[data-a=rot]').onclick = () => rotate(o)
@@ -944,13 +963,13 @@ function renderRoom(el) {
 function renderOpening(el) {
   const op = selectedOp
   const along = op.wall === 'N' || op.wall === 'S' ? 'x' : 'y'
-  document.getElementById('seltitle').innerHTML = `Проём <small>${op.id} · тащи по стене мышью</small>`
+  document.getElementById('seltitle').innerHTML = `Проём <small>${op.id} · ${cm(op.w)} × ${cm(op.h)} см · тащи по стене мышью</small>`
   el.innerHTML = `<div class="form">
     <label>Тип</label><select data-k="type">${OPENINGS.map(([t, n]) => `<option value="${t}" ${t === op.type ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <label>Стена</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === op.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
     <label>Центр вдоль стены, м</label><input data-k="along" value="${(+op[along]).toFixed(2)}">
-    <label>Ширина × высота</label><div class="nums"><input data-k="w" value="${op.w}"><input data-k="h" value="${op.h}"><span></span><span></span></div>
-    <label>От пола, м</label><input data-k="elevation" value="${op.elevation || 0}">
+    <label>Ширина × высота, см</label><div class="nums"><input data-k="w" value="${cm(op.w)}"><input data-k="h" value="${cm(op.h)}"><span></span><span></span></div>
+    <label>От пола, см</label><input data-k="elevation" value="${cm(op.elevation || 0)}">
     ${op.type === 'door' ? `<label>Открыта на, °</label><input data-k="open" value="${op.open ?? 25}">` : ''}
     <label>Куда ведёт</label><input data-k="leads_to" value="${op.leads_to || ''}" placeholder="коридор, балкон…">
   </div>
@@ -958,7 +977,8 @@ function renderOpening(el) {
   bindForm(el, (k, v) => {
     if (k === 'wall') { op.wall = v; Object.assign(op, { N: { y: D, x: W / 2 }, S: { y: 0, x: W / 2 }, E: { x: W, y: D / 2 }, W: { x: 0, y: D / 2 } }[v]) }
     else if (k === 'along') op[along] = Math.min(along === 'x' ? W : D, Math.max(0, num(v, op[along])))
-    else if (['w', 'h', 'elevation', 'open'].includes(k)) op[k] = num(v, op[k])
+    else if (['w', 'h', 'elevation'].includes(k)) op[k] = Math.max(0, num(v, op[k] * 100) / 100)
+    else if (k === 'open') op[k] = num(v, op[k])
     else op[k] = v
     buildShell(); highlight(); renderProps()
   })
@@ -1008,7 +1028,7 @@ function footprint(o) {
 }
 let magnet = true  // прилипание мебели к стенам; кнопка «Магнит» на панели
 function constrain(o, snap = 0.25) {
-  if (!magnet) snap = -1
+  if (!magnet) snap = -1  // snap < 0 — без прилипания вообще
   o.elevation = Math.max(0, o.elevation || 0)
   if (o.elevation + (o.h || 0) > H) o.elevation = Math.max(0, H - o.h)
   if (o.mount === 'wall') { snapToWall(o); return o }
@@ -1033,7 +1053,7 @@ function renderList() {
   for (const o of room.objects) {
     const el = document.createElement('div')
     el.className = 'item' + (o === selected ? ' sel' : '')
-    el.innerHTML = `<span class="sw" style="background:${o.color}"></span>${o.electric ? '<span class="el">⚡</span> ' : ''}${o.name}<small>${o.id} · ${o.w}×${o.d}×${o.h} м${o.power_w ? ' · ' + o.power_w + ' Вт' : ''}${o.note ? ' · ' + o.note : ''}</small>`
+    el.innerHTML = `<span class="sw" style="background:${o.color}"></span>${o.electric ? '<span class="el">⚡</span> ' : ''}${o.name}<small>${o.id} · ${cm(o.w)}×${cm(o.d)}×${cm(o.h)} см${o.power_w ? ' · ' + o.power_w + ' Вт' : ''}${o.note ? ' · ' + o.note : ''}</small>`
     el.onclick = () => select(o)
     list.appendChild(el)
   }
