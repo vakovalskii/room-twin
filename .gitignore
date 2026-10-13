@@ -1,0 +1,6 @@
+models/*.onnx
+captures/
+out/
+__pycache__/
+.DS_Store
+samples/room.sample.html

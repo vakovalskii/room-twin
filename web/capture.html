@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Скан комнаты</title>
+<style>
+  :root {
+    --bg: #0e0f0d;
+    --ink: #f3f1ea;
+    --dim: #9b988d;
+    --accent: #c8e86b;
+    --warn: #f0b45a;
+    --ring: rgba(243, 241, 234, 0.16);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+  .shade { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 62%, rgba(0,0,0,.7) 100%); }
+  header, footer { position: relative; z-index: 2; padding: max(14px, env(safe-area-inset-top)) 16px 12px; }
+  footer { margin-top: auto; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
+  .ring { position: relative; z-index: 2; width: min(62vw, 260px); aspect-ratio: 1; margin: 0 auto; }
+  .ring svg { width: 100%; height: 100%; overflow: visible; }
+  .ring .count { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring .big { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .ring .small { color: var(--dim); font-size: 12px; }
+  .hint { min-height: 2.8em; text-align: center; color: var(--ink); font-size: 14px; margin: 10px 0 14px; }
+  .hint.warn { color: var(--warn); }
+  .row { display: flex; gap: 10px; }
+  button { flex: 1; appearance: none; border: 0; border-radius: 14px; padding: 15px 14px; font: inherit;
+    font-weight: 600; color: #11130d; background: var(--accent); }
+  button.ghost { background: rgba(243, 241, 234, 0.14); color: var(--ink); backdrop-filter: blur(10px); }
+  button:disabled { opacity: .4; }
+  .start { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center;
+    gap: 14px; padding: 24px 20px; background: var(--bg); }
+  .start p { margin: 0; color: var(--dim); }
+  .start ol { margin: 0; padding-left: 20px; color: var(--ink); }
+  .start li { margin: 6px 0; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim); }
+  input { width: 110px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ring); background: #1a1b18;
+    color: var(--ink); font: inherit; text-align: right; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<video id="video" playsinline muted autoplay></video>
+<div class="shade"></div>
+
+<section class="start" id="start">
+  <h1>Скан комнаты для цифрового двойника</h1>
+  <ol>
+    <li>Встань в центр комнаты, телефон вертикально, камерой от себя.</li>
+    <li>Медленно повернись на полный круг. Кадры снимутся сами каждые 15°.</li>
+    <li>Можно пройти второй круг, чуть наклонив телефон вниз, чтобы попала мебель.</li>
+    <li>Нажми «Готово» и отправь файл.</li>
+  </ol>
+  <label>Комната <input id="room" value="Гостиная"></label>
+  <label>Высота потолка, м <input id="ceiling" inputmode="decimal" placeholder="не знаю"></label>
+  <button id="go">Начать</button>
+  <p id="err" class="hidden"></p>
+</section>
+
+<header>
+  <h1 id="title">Скан комнаты</h1>
+  <div class="sub" id="sub">Поворачивайся медленно</div>
+</header>
+
+<div class="ring">
+  <svg viewBox="-110 -110 220 220" id="svg"></svg>
+  <div class="count"><div><div class="big" id="n">0</div><div class="small">кадров</div></div></div>
+</div>
+
+<footer>
+  <div class="hint" id="hint">Держи телефон ровно</div>
+  <div class="row">
+    <button class="ghost" id="shot">Снять кадр</button>
+    <button id="done" disabled>Готово</button>
+  </div>
+</footer>
+
+<script>
+// Скан: камера + ориентация телефона. Каждый кадр хранит направление камеры
+// (yaw, pitch по фронтальной оси задней камеры) — сервер по ним собирает план.
+const STEP = 15            // градусов между автоснимками
+const SECTORS = 360 / STEP
+const $ = id => document.getElementById(id)
+const video = $('video')
+const frames = []
+let orient = null          // последнее событие ориентации
+let lastYaw = null
+let lastMove = 0
+let stream = null
+
+// Направление задней камеры по углам W3C (Z-X'-Y''): камера смотрит вдоль -Z устройства
+function cameraDir(a, b, g) {
+  const r = Math.PI / 180
+  const [ca, sa, cb, sb, cg, sg] = [Math.cos(a * r), Math.sin(a * r), Math.cos(b * r), Math.sin(b * r), Math.cos(g * r), Math.sin(g * r)]
+  // третий столбец матрицы R = Rz(a)·Rx(b)·Ry(g), со знаком минус
+  const x = -(ca * sg + sa * sb * cg)
+  const y = -(sa * sg - ca * sb * cg)
+  const z = -(cb * cg)
+  const yaw = (Math.atan2(x, y) * 180 / Math.PI + 360) % 360
+  const pitch = Math.asin(Math.max(-1, Math.min(1, z))) * 180 / Math.PI
+  return { yaw, pitch }
+}
+
+function angleDiff(a, b) { return Math.abs(((a - b + 540) % 360) - 180) }
+
+function drawRing(current) {
+  const covered = new Set(frames.map(f => Math.floor(f.yaw / STEP) % SECTORS))
+  let html = ''
+  for (let i = 0; i < SECTORS; i++) {
+    const a0 = (i * STEP - 90 + 1.5) * Math.PI / 180
+    const a1 = ((i + 1) * STEP - 90 - 1.5) * Math.PI / 180
+    const R = 100, r = 84
+    const p = (ang, rad) => `${(Math.cos(ang) * rad).toFixed(1)} ${(Math.sin(ang) * rad).toFixed(1)}`
+    const fill = covered.has(i) ? 'var(--accent)' : 'var(--ring)'
+    html += `<path d="M ${p(a0, R)} A ${R} ${R} 0 0 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 0 0 ${p(a0, r)} Z" fill="${fill}"/>`
+  }
+  if (current != null) {
+    const a = (current - 90) * Math.PI / 180
+    html += `<circle cx="${(Math.cos(a) * 92).toFixed(1)}" cy="${(Math.sin(a) * 92).toFixed(1)}" r="7" fill="#fff"/>`
+  }
+  $('svg').innerHTML = html
+}
+
+async function snap(dir, auto) {
+  if (!video.videoWidth) return
+  const long = 1280
+  const k = long / Math.max(video.videoWidth, video.videoHeight)
+  const c = document.createElement('canvas')
+  c.width = Math.round(video.videoWidth * k)
+  c.height = Math.round(video.videoHeight * k)
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height)
+  const jpeg = c.toDataURL('image/jpeg', 0.82)
+  frames.push({
+    i: frames.length, t: Date.now(), auto,
+    yaw: +dir.yaw.toFixed(2), pitch: +dir.pitch.toFixed(2),
+    alpha: orient?.alpha ?? null, beta: orient?.beta ?? null, gamma: orient?.gamma ?? null,
+    screen_angle: screen.orientation?.angle ?? window.orientation ?? 0,
+    width: c.width, height: c.height, jpeg,
+  })
+  lastYaw = dir.yaw
+  $('n').textContent = frames.length
+  $('done').disabled = frames.length < 6
+  if (navigator.vibrate) navigator.vibrate(15)
+}
+
+function onOrient(e) {
+  if (e.alpha == null) return
+  const prev = orient
+  orient = e
+  const dir = cameraDir(e.alpha, e.beta, e.gamma)
+  drawRing(dir.yaw)
+  if (prev && Math.abs(prev.alpha - e.alpha) + Math.abs(prev.beta - e.beta) > 1.2) lastMove = performance.now()
+  const steady = performance.now() - lastMove > 250
+  const hint = $('hint')
+  if (Math.abs(dir.pitch) > 35) {
+    hint.textContent = dir.pitch > 0 ? 'Опусти телефон к горизонту' : 'Подними телефон к горизонту'
+    hint.className = 'hint warn'
+    return
+  }
+  hint.className = 'hint'
+  const covered = new Set(frames.map(f => Math.floor(f.yaw / STEP) % SECTORS)).size
+  hint.textContent = covered >= SECTORS ? 'Круг пройден. Можно «Готово» или второй круг ниже' : steady ? 'Поворачивайся дальше' : 'Медленнее, жду, пока кадр не смажется'
+  if (steady && (lastYaw == null || angleDiff(dir.yaw, lastYaw) >= STEP)) snap(dir, true)
+}
+
+$('go').onclick = async () => {
+  try {
+    if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+      const ok = await DeviceOrientationEvent.requestPermission()
+      if (ok !== 'granted') throw new Error('Нужен доступ к движению и ориентации')
+    }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+    })
+    video.srcObject = stream
+    await video.play()
+    window.addEventListener('deviceorientation', onOrient)
+    $('start').classList.add('hidden')
+    $('title').textContent = $('room').value || 'Скан комнаты'
+    drawRing(null)
+  } catch (err) {
+    $('err').textContent = `Не получилось: ${err.message}. Страница должна открываться по https.`
+    $('err').classList.remove('hidden')
+  }
+}
+
+$('shot').onclick = () => orient && snap(cameraDir(orient.alpha, orient.beta, orient.gamma), false)
+
+$('done').onclick = async () => {
+  window.removeEventListener('deviceorientation', onOrient)
+  const track = stream?.getVideoTracks()[0]
+  const ceiling = parseFloat(($('ceiling').value || '').replace(',', '.'))
+  const capture = {
+    format: 'room-twin-capture/1',
+    room: $('room').value || 'Комната',
+    ceiling_m: Number.isFinite(ceiling) ? ceiling : null,
+    created: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    camera: track?.getSettings?.() ?? {},
+    frames,
+  }
+  const body = JSON.stringify(capture)
+  // открыто с serve_capture.py — скан сразу уходит на компьютер
+  $('hint').textContent = 'Отправляю на компьютер…'
+  try {
+    const r = await fetch('upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+    if (r.ok) {
+      const { file } = await r.json()
+      $('hint').textContent = `Готово, скан на компьютере: ${file}`
+      $('done').disabled = true
+      return
+    }
+  } catch {}
+  // иначе — файлом: поделиться или скачать
+  $('hint').textContent = 'Сохрани файл и передай его на компьютер'
+  const name = `room-capture-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`
+  const file = new File([body], name, { type: 'application/json' })
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return } catch {}
+  }
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(file)
+  a.download = name
+  a.click()
+}
+</script>
+</body>
+</html>
