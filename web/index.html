@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room Twin</title>
+<style>
+  :root { --bg: #f3f4f1; --card: #fff; --ink: #22261f; --dim: #80857b; --line: #e3e5df; --ok: #5d9a2a; --wait: #c99a12; --bad: #d4453a; --chip: #eef0ea; --accent: #5f8a64; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #141613; --card: #1c1f1b; --ink: #ecede8; --dim: #8f948a; --line: #2b2f29; --ok: #9bd15a; --wait: #f0c94d; --bad: #ff6b5a; --chip: #252923; --accent: #8fbf8f; }
+  }
+  :root[data-theme="dark"] { --bg: #141613; --card: #1c1f1b; --ink: #ecede8; --dim: #8f948a; --line: #2b2f29; --ok: #9bd15a; --wait: #f0c94d; --bad: #ff6b5a; --chip: #252923; --accent: #8fbf8f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 18px; padding: 10px 20px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  .brand { font-weight: 700; letter-spacing: -0.01em; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+  .brand i { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); display: inline-block; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav a { color: var(--ink); text-decoration: none; padding: 7px 12px; border-radius: 10px; font-size: 14px; }
+  nav a.on { background: var(--chip); font-weight: 600; }
+  .phone-pill { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--dim); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .dot.on { background: var(--ok); animation: pulse 1.4s infinite; }
+  .dot.rec { background: var(--bad); animation: pulse .9s infinite; }
+  @keyframes pulse { 50% { opacity: .35 } }
+  main { flex: 1; min-height: 0; }
+  .view { display: none; max-width: 1320px; margin: 0 auto; padding: 22px 20px 40px; }
+  .view.on { display: block; }
+  .view.full { max-width: none; padding: 0; height: calc(100vh - 55px); }
+  h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+  .lead { color: var(--dim); margin: 0 0 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
+  .head h2 { margin: 0; font-size: 17px; }
+  .dim { color: var(--dim); }
+  .pill { display: inline-flex; gap: 6px; align-items: center; padding: 2px 10px; border-radius: 99px; background: var(--chip); font-size: 13px; }
+  .live-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+  @media (max-width: 900px) { .live-grid { grid-template-columns: 1fr; } }
+  .cloud3d { position: relative; height: 420px; border-radius: 12px; overflow: hidden; background: #0f100e; }
+  .cloud3d .cap { position: absolute; left: 10px; top: 8px; color: #cfd2c8; font-size: 12px; pointer-events: none; }
+  .frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; max-height: 420px; overflow: auto; align-content: start; }
+  .fr { position: relative; border-radius: 9px; overflow: hidden; border: 3px solid var(--line); background: var(--chip); aspect-ratio: 9 / 16; }
+  .fr img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .fr.ok { border-color: var(--ok); } .fr.queued, .fr.sent { border-color: var(--wait); } .fr.bad { border-color: var(--bad); }
+  .fr.bad img { opacity: .5; }
+  .fr .n { position: absolute; left: 3px; top: 3px; background: rgba(0,0,0,.6); color: #fff; font-size: 10.5px; padding: 0 4px; border-radius: 4px; }
+  .fr .r { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(160, 30, 20, .85); color: #fff; font-size: 10px; line-height: 1.2; padding: 2px 4px; }
+  .rows { display: grid; gap: 6px; margin-top: 12px; }
+  .bar { display: grid; grid-template-columns: 64px 1fr 44px; gap: 8px; align-items: center; font-size: 12.5px; }
+  .bar div { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ok); }
+  .side img { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #fafaf7; display: block; margin-top: 10px; }
+  .empty { color: var(--dim); padding: 26px 0; text-align: center; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
+  .step { border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .step b { display: block; margin-bottom: 4px; }
+  .step.done { border-color: var(--ok); }
+  .step.now { border-color: var(--wait); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wait) 20%, transparent); }
+  .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .room { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+  .room .thumb { aspect-ratio: 4 / 3; background: #fafaf7 center / contain no-repeat; border-bottom: 1px solid var(--line); }
+  .room .body { padding: 12px 14px; display: grid; gap: 8px; }
+  .room .body b { font-size: 15px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btns a, .btn { color: var(--ink); text-decoration: none; padding: 6px 11px; border-radius: 9px; background: var(--chip); border: 1px solid var(--line); font-size: 13px; cursor: pointer; font: inherit; font-size: 13px; }
+  .btns a.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .sub { display: flex; gap: 6px; align-items: center; padding: 8px 14px; background: var(--card); border-bottom: 1px solid var(--line); }
+  .sub a { color: var(--ink); text-decoration: none; padding: 5px 10px; border-radius: 8px; font-size: 13px; }
+  .sub a.on { background: var(--chip); font-weight: 600; }
+  .sub .back { color: var(--dim); margin-right: 8px; }
+  .frame-wrap { height: calc(100% - 45px); }
+  .frame-wrap iframe, .frame-wrap img { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); object-fit: contain; }
+  .phone { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 760px) { .phone { grid-template-columns: 1fr; } }
+  #qr { background: #fff; padding: 14px; border-radius: 14px; border: 1px solid var(--line); width: 260px; height: 260px; }
+  #qr img, #qr canvas { width: 100% !important; height: auto !important; }
+  .url { font: 600 18px ui-monospace, Menlo, monospace; word-break: break-all; margin: 6px 0 14px; }
+  ol li { margin: 6px 0; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand"><i></i>Room Twin</div>
+  <nav>
+    <a href="#status" data-v="status">Статус</a>
+    <a href="#rooms" data-v="rooms">Комнаты</a>
+    <a href="#phone" data-v="phone">Телефон</a>
+  </nav>
+  <div class="phone-pill"><span class="dot" id="pdot"></span><span id="ptext">телефона нет</span></div>
+</header>
+<main>
+  <section class="view" id="v-status">
+    <h1>Статус</h1>
+    <p class="lead">Что делает телефон и что компьютер строит из кадров. Обновляется само.</p>
+    <div class="card">
+      <div class="head"><h2>Шаги</h2><span class="dim" id="stepnote"></span></div>
+      <div class="steps" id="steps"></div>
+    </div>
+    <div id="live"></div>
+  </section>
+
+  <section class="view" id="v-rooms">
+    <h1>Комнаты</h1>
+    <p class="lead">Всё, что отснято. Двойника по облаку собирает агент; дальше его можно править в редакторе.</p>
+    <div class="rooms" id="rooms"></div>
+  </section>
+
+  <section class="view full" id="v-room">
+    <div class="sub" id="roomsub"></div>
+    <div class="frame-wrap" id="roomframe"></div>
+  </section>
+
+  <section class="view" id="v-phone">
+    <h1>Телефон</h1>
+    <p class="lead">Телефон в той же Wi-Fi. Наведи камеру на код или набери адрес.</p>
+    <div class="phone">
+      <div id="qr"></div>
+      <div>
+        <div class="dim">Адрес для телефона</div>
+        <div class="url" id="purl">…</div>
+        <ol>
+          <li>Браузер скажет, что сертификат непроверенный: «Подробнее» → «Перейти на сайт». Это наш компьютер.</li>
+          <li>Разреши камеру и «Движение и ориентация».</li>
+          <li>Встань в центр комнаты, телефон на уровне груди. Не садись: снизу видно только кровать.</li>
+          <li>Три круга по стрелке: прямо, вниз, вверх. Красный сектор — переснять.</li>
+          <li>«Готово» — и смотри вкладку «Статус»: облако строится тут.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+const $ = id => document.getElementById(id)
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const ROWS = { mid: ['прямо', 24], low: ['вниз', 12], high: ['вверх', 12] }
+const STAGE = { start: 'открыл страницу', scan: 'снимает', sending: 'отправляет', done: 'закончил' }
+const BUILD = { building: 'собираю облако…', done: 'облако готово', error: 'сборка упала' }
+let data = { phones: [], live: [], done: [] }
+
+// ── маршруты ────────────────────────────────────────────────────────────
+function route() {
+  const [view, id, tab] = (location.hash.slice(1) || 'status').split('/')
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === `v-${view}`))
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.v === view || (view === 'room' && a.dataset.v === 'rooms')))
+  if (view === 'room') openRoom(id, tab || 'editor')
+  if (view === 'status') cloudView.resize()
+}
+addEventListener('hashchange', route)
+
+// ── живое облако ───────────────────────────────────────────────────────
+const cloudView = (() => {
+  const box = document.createElement('div')
+  box.className = 'cloud3d'
+  box.innerHTML = '<div class="cap" id="cloudcap">облако появится после первых кадров</div>'
+  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  box.appendChild(renderer.domElement)
+  const scene = new THREE.Scene()
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 100)
+  camera.position.set(-5, 6, 6)
+  const controls = new OrbitControls(camera, renderer.domElement)
+  controls.target.set(0, 0.8, 0)
+  controls.autoRotate = true
+  controls.autoRotateSpeed = 0.8
+  controls.enableDamping = true
+  scene.add(new THREE.GridHelper(12, 24, 0x555a50, 0x2a2d27))
+  const me = new THREE.Mesh(new THREE.SphereGeometry(0.07), new THREE.MeshBasicMaterial({ color: 0xff7a00 }))
+  me.position.y = 1.0
+  scene.add(me)
+  let points = null, ver = null
+  function resize() {
+    const w = box.clientWidth || 600, h = box.clientHeight || 420
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix()
+  }
+  async function load(id, v) {
+    if (v === ver || !v) return
+    ver = v
+    const buf = await (await fetch(`live/${id}/cloud.bin`, { cache: 'no-store' })).arrayBuffer().catch(() => null)
+    if (!buf || buf.byteLength < 4) return
+    const n = new DataView(buf).getUint32(0, true)
+    const xyz = new Float32Array(buf, 4, n * 3), rgb = new Uint8Array(buf, 4 + n * 12, n * 3)
+    const pos = new Float32Array(n * 3), col = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      pos[i * 3] = xyz[i * 3]; pos[i * 3 + 1] = xyz[i * 3 + 2]; pos[i * 3 + 2] = -xyz[i * 3 + 1]
+      col[i * 3] = rgb[i * 3] / 255; col[i * 3 + 1] = rgb[i * 3 + 1] / 255; col[i * 3 + 2] = rgb[i * 3 + 2] / 255
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    if (points) { scene.remove(points); points.geometry.dispose() }
+    points = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.03, vertexColors: true }))
+    scene.add(points)
+    box.querySelector('.cap').textContent = `${n.toLocaleString('ru')} точек · обновлено ${new Date().toLocaleTimeString('ru')}`
+  }
+  renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera) })
+  addEventListener('resize', resize)
+  return { box, load, resize, reset: () => { ver = null; if (points) { scene.remove(points); points = null } } }
+})()
+
+// ── статус ─────────────────────────────────────────────────────────────
+function steps() {
+  const phone = data.phones[0]
+  const live = data.live[0]
+  const s = [
+    ['Сервер', 'запущен, ждёт телефон', true],
+    ['Телефон', phone ? `${phone.device} · ${STAGE[phone.stage] || phone.stage}` : 'открой вкладку «Телефон»', !!phone],
+    ['Съёмка', live ? `${live.frames.filter(f => f.state === 'ok').length} кадров принято` : 'ещё не начата', !!live && (live.build || phone?.stage === 'done')],
+    ['Облако', live?.build ? BUILD[live.build] : 'после «Готово»', live?.build === 'done'],
+    ['Двойник', 'собирает агент, потом правишь в редакторе', false],
+  ]
+  const now = s.findIndex(x => !x[2])
+  $('steps').innerHTML = s.map(([t, d, ok], k) => `<div class="step ${ok ? 'done' : k === now ? 'now' : ''}"><b>${ok ? '✓ ' : ''}${t}</b><span class="dim">${esc(d)}</span></div>`).join('')
+}
+
+let liveIdShown = null
+function liveCard(s) {
+  const ok = s.frames.filter(f => f.state === 'ok').length
+  const bad = s.frames.filter(f => f.state === 'bad').length
+  const wait = s.frames.length - ok - bad
+  const rows = Object.entries(ROWS).map(([k, [name, n]]) => {
+    const got = s.frames.filter(f => f.row === k && f.state === 'ok').length
+    return `<div class="bar"><span>${name}</span><div><i style="width:${Math.min(100, got / n * 100)}%"></i></div><span class="dim">${got}/${n}</span></div>`
+  }).join('')
+  const frames = s.frames.slice().reverse().map(f => `<div class="fr ${f.state}" title="${esc(f.reason || f.tip || '')}">
+      <img loading="lazy" src="out/${s.id}/frames/${String(f.i).padStart(3, '0')}.jpg"><span class="n">#${f.i}</span>
+      ${f.reason ? `<span class="r">${esc(f.reason.split(' — ')[0])}</span>` : ''}</div>`).join('')
+  const plan = s.build === 'done' ? `out/${s.id}/plan_room.png` : `live/${s.id}/plan.png?v=${s.plan_ver}`
+  return `<div class="head">
+      <h2>${esc(s.room)}</h2><span class="dim">${esc(s.id)}</span>
+      <span class="pill">${s.build ? esc(BUILD[s.build] || s.build) : 'идёт съёмка'}</span>
+      <span class="pill" style="color:var(--ok)">принято ${ok}</span>
+      <span class="pill" style="color:var(--wait)">считается ${wait}</span>
+      <span class="pill" style="color:var(--bad)">брак ${bad}</span>
+      ${s.size ? `<span class="pill">≈ ${s.size[0]} × ${s.size[1]} м</span>` : ''}
+      ${s.build === 'done' ? `<a class="btn" href="#room/${s.id}/cloud">3D-облако целиком</a>` : ''}
+    </div>
+    <div class="live-grid">
+      <div id="cloudslot"></div>
+      <div class="side">
+        <div class="frames">${frames || '<div class="empty">кадров пока нет</div>'}</div>
+        <div class="rows">${rows}</div>
+        ${s.plan_ver > 0 || s.build === 'done' ? `<img src="${plan}" alt="план">` : ''}
+      </div>
+    </div>`
+}
+
+let lastLive = ''
+function renderStatus() {
+  steps()
+  const s = data.live[0]
+  if (!s) {
+    if (lastLive !== 'none') $('live').innerHTML = '<div class="card"><div class="empty">Живой съёмки нет. Открой на телефоне адрес со вкладки «Телефон» и нажми «Начать».</div></div>'
+    lastLive = 'none'
+    return
+  }
+  const html = liveCard(s)
+  if (html !== lastLive) {
+    if (!$('livecard') || liveIdShown !== s.id) {
+      $('live').innerHTML = '<div class="card" id="livecard"></div>'
+      if (liveIdShown !== s.id) cloudView.reset()
+      liveIdShown = s.id
+    }
+    $('livecard').innerHTML = html
+    $('cloudslot').appendChild(cloudView.box)
+    cloudView.resize()
+    lastLive = html
+  }
+  cloudView.load(s.id, s.plan_ver)
+}
+
+// ── комнаты ────────────────────────────────────────────────────────────
+let lastRooms = ''
+function renderRooms() {
+  const html = data.done.map(d => {
+    const has = f => d.files.includes(f)
+    const thumb = has('plan_room.png') ? `out/${d.id}/plan_room.png` : ''
+    return `<div class="room">
+      <div class="thumb" style="${thumb ? `background-image:url('${thumb}')` : ''}"></div>
+      <div class="body">
+        <b>${esc(d.room || 'Без названия')}</b><span class="dim">${esc(d.id)} · ${has('room.html') ? 'двойник готов' : has('cloud.html') ? 'облако есть, двойника ещё нет' : esc(BUILD[d.build] || 'нет результатов')}</span>
+        <div class="btns">
+          ${has('room.html') ? `<a class="primary" href="#room/${d.id}/editor">Редактор</a>` : ''}
+          ${has('cloud.html') ? `<a href="#room/${d.id}/cloud">Облако</a>` : ''}
+          ${has('plan_room.png') ? `<a href="#room/${d.id}/plan">План</a>` : ''}
+          ${has('sheet.jpg') ? `<a href="#room/${d.id}/sheet">Кадры</a>` : ''}
+        </div>
+      </div></div>`
+  }).join('') || '<div class="empty">Пока ничего не отснято</div>'
+  if (html !== lastRooms) { $('rooms').innerHTML = html; lastRooms = html }
+}
+
+function openRoom(id, tab) {
+  const d = data.done.find(x => x.id === id) || { id, files: ['room.html', 'cloud.html', 'plan_room.png', 'sheet.jpg'] }
+  const tabs = [['editor', 'Редактор', 'room.html'], ['cloud', 'Облако точек', 'cloud.html'], ['plan', 'План', 'plan_room.png'], ['sheet', 'Кадры', 'sheet.jpg']]
+  $('roomsub').innerHTML = `<a class="back" href="#rooms">← Комнаты</a><b style="margin-right:10px">${esc(d.room || id)}</b>` +
+    tabs.filter(t => d.files.includes(t[2])).map(([k, n]) => `<a href="#room/${id}/${k}" class="${k === tab ? 'on' : ''}">${n}</a>`).join('')
+  const file = tabs.find(t => t[0] === tab)?.[2] || 'room.html'
+  const src = `out/${id}/${file}`
+  const cur = $('roomframe').firstElementChild
+  if (cur?.getAttribute('src') === src) return
+  $('roomframe').innerHTML = file.endsWith('.html') ? `<iframe src="${src}"></iframe>` : `<img src="${src}" alt="">`
+}
+
+// ── телефон ────────────────────────────────────────────────────────────
+fetch('api/info').then(r => r.json()).then(info => {
+  $('purl').textContent = info.phone_url
+  if (window.QRCode) new QRCode($('qr'), { text: info.phone_url, width: 232, height: 232, correctLevel: QRCode.CorrectLevel.M })
+}).catch(() => { $('purl').textContent = 'адрес не получен — открой страницу с компьютера, где запущен сервер' })
+
+function renderPhone() {
+  const p = data.phones[0]
+  $('pdot').className = 'dot' + (p ? (p.stage === 'scan' ? ' rec' : ' on') : '')
+  $('ptext').textContent = p ? `${p.device} · ${STAGE[p.stage] || p.stage}${p.stage === 'scan' && p.frames ? ` · ${p.frames} кадров` : ''}${p.torch ? ' · фонарик' : ''}` : 'телефон не подключён'
+}
+
+async function tick() {
+  try {
+    data = await (await fetch('api/sessions', { cache: 'no-store' })).json()
+    renderPhone(); renderStatus(); renderRooms()
+  } catch {}
+  setTimeout(tick, 1000)
+}
+route()
+tick()
+</script>
+</body>
+</html>

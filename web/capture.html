@@ -139,6 +139,21 @@ const video = $('video')
 const frames = []           // {row, sector, state, reason, srv, jpeg, ...метаданные}
 let orient = null, lastMove = 0, stream = null, liveId = null, planVer = -1
 let lastSnapAt = 0, uploading = false
+let stage = 'start', torchOn = false, scanId = null
+
+// пинг компьютеру: страница статуса показывает, что телефон на связи и что он сейчас делает
+function deviceName() {
+  const ua = navigator.userAgent
+  const m = ua.match(/iPhone|iPad|Android[^;)]*/)
+  const br = /CriOS/.test(ua) ? 'Chrome' : /FxiOS/.test(ua) ? 'Firefox' : /Safari/.test(ua) && !/Chrome/.test(ua) ? 'Safari' : /Chrome/.test(ua) ? 'Chrome' : ''
+  return [m ? m[0].trim() : 'браузер', br].filter(Boolean).join(' · ')
+}
+function ping() {
+  fetch('phone/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stage, live: liveId || scanId, frames: frames.length, device: deviceName(), torch: torchOn }) }).catch(() => {})
+}
+setInterval(ping, 2000)
+ping()
 
 function cameraDir(a, b, g) {
   // направление задней камеры по углам W3C (Z-X'-Y''): −Z устройства, третий столбец Rz(a)·Rx(b)·Ry(g)
@@ -363,6 +378,7 @@ $('go').onclick = async () => {
       $('torch').onclick = async () => {
         on = !on
         try { await track.applyConstraints({ advanced: [{ torch: on }] }) } catch { on = false }
+        torchOn = on
         $('torch').classList.toggle('on', on)
       }
     }
@@ -372,10 +388,11 @@ $('go').onclick = async () => {
         room: $('room').value || 'Комната', ceiling_m: Number.isFinite(ceiling) ? ceiling : null,
         created: new Date().toISOString(), user_agent: navigator.userAgent, camera: track.getSettings?.() ?? {},
       }) })
-      if (r.ok) { liveId = (await r.json()).id; poll() }
+      if (r.ok) { liveId = scanId = (await r.json()).id; poll() }
     } catch {}
     if (!liveId) note('Компьютера не видно — сниму на телефон, потом отдашь файлом', 'wait')
     window.addEventListener('deviceorientation', onOrient)
+    stage = 'scan'; ping()
     $('start').classList.add('hidden')
     draw(null)
   } catch (err) {
@@ -392,6 +409,7 @@ async function watchBuild(id) {
     try { st = await (await fetch(`status/${id}`)).json() } catch {}
     if (st.state === 'done') {
       $('say').textContent = 'Облако готово'
+      stage = 'done'; ping()
       note('Дальше комнату по облаку и кадрам собирает Claude на компьютере')
       $('open').href = `out/${id}/cloud.html`
       $('open').classList.remove('hidden')
@@ -407,6 +425,7 @@ async function watchBuild(id) {
 $('done').onclick = async () => {
   window.removeEventListener('deviceorientation', onOrient)
   $('done').disabled = true
+  stage = 'sending'; ping()
   if (liveId) {
     $('say').textContent = 'Отправляю остаток…'
     while (uploading) await new Promise(r => setTimeout(r, 200))

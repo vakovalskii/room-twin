@@ -11,6 +11,7 @@ import base64
 import io
 import json
 import queue
+import struct
 import threading
 from pathlib import Path
 
@@ -53,6 +54,7 @@ class LiveScan:
         self.frames: list[dict] = []     # метаданные кадров в порядке прихода
         self.cloud: dict[int, dict] = {}  # i → точки кадра в осях камеры
         self.plan_png = b""
+        self.cloud_bin = b""  # живое облако для страницы статуса: uint32 n, float32 xyz×n, uint8 rgb×n
         self.plan_ver = 0
         self.size = None
         self.lock = threading.Lock()
@@ -139,12 +141,15 @@ class LiveScan:
             frames = [self.cloud[k] for k in sorted(self.cloud) if self.frames[k]["state"] == "ok"]
         if not frames:
             return
-        pts = []
+        pts, cols = [], []
         for f in frames:
             p = world(f["cam"][f["ok"]], f["yaw"], f["pitch"])
             p[:, 2] += cam_h
-            pts.append(p[(p[:, 2] > -0.1) & (p[:, 2] < ceiling + 0.2)])
-        xyz = np.concatenate(pts)
+            keep = (p[:, 2] > -0.1) & (p[:, 2] < ceiling + 0.2)
+            pts.append(p[keep]); cols.append(f["rgb"][f["ok"]][keep])
+        xyz, rgb = np.concatenate(pts), np.concatenate(cols)
+        sub = slice(None, None, max(1, len(xyz) // 80000))
+        cloud = struct.pack("<I", len(xyz[sub])) + xyz[sub].astype("<f4").tobytes() + rgb[sub].astype(np.uint8).tobytes()
         img = render_plan(xyz, [f["yaw"] for f in frames], ceiling, px_per_m=60)
         buf = io.BytesIO()
         img.save(buf, "PNG", optimize=False)
@@ -154,7 +159,7 @@ class LiveScan:
             lo, hi = np.percentile(walls, 3, axis=0), np.percentile(walls, 97, axis=0)
             size = [round(float(hi[0] - lo[0]), 1), round(float(hi[1] - lo[1]), 1)]
         with self.lock:
-            self.plan_png, self.size = buf.getvalue(), size
+            self.plan_png, self.size, self.cloud_bin = buf.getvalue(), size, cloud
             self.plan_ver += 1
 
     def finish(self, captures: Path) -> Path:

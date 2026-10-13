@@ -54,6 +54,41 @@
   .item .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   .item small { display: block; color: var(--dim); }
   .item.sel { border-color: var(--accent); }
+  .item .el { color: #c98a00; font-weight: 600; }
+  .editor { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .editor { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 14px; font-weight: 650; display: flex; gap: 8px; align-items: baseline; }
+  .panel h3 small { color: var(--dim); font-weight: 400; }
+  .group { margin-bottom: 10px; }
+  .group b { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 600; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { appearance: none; border: 1px solid var(--line); background: var(--chip); color: var(--ink); font: inherit; font-size: 12.5px;
+    padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+  .chips button:hover { border-color: var(--accent); }
+  .form { display: grid; grid-template-columns: 110px 1fr; gap: 7px 10px; align-items: center; font-size: 13px; }
+  .form label { color: var(--dim); }
+  .form input, .form select { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .form input[type=checkbox] { width: auto; }
+  .form input[type=color] { padding: 2px; height: 30px; }
+  .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .acts button, .savebar button { appearance: none; border: 1px solid var(--line); background: var(--chip); color: var(--ink); font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 10px; cursor: pointer; }
+  .acts button.danger { color: #c0392b; }
+  .savebar { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+  .savebar button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .savebar span { font-size: 12px; color: var(--dim); }
+  .empty { color: var(--dim); font-size: 13px; padding: 8px 0; }
+  .kbd { color: var(--dim); font-size: 11.5px; margin-top: 10px; line-height: 1.6; }
+  .kbd kbd { font: 11px ui-monospace, Menlo, monospace; background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .gizmo-bar { position: absolute; left: 12px; top: 12px; z-index: 3; display: none; gap: 4px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .gizmo-bar.show { display: flex; }
+  .gizmo-bar button { appearance: none; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  .gizmo-bar button.on { background: var(--accent); color: #fff; }
+  .embedded .crumbs, .embedded h1, .embedded .lead { display: none; }
+  .embedded .page { padding-top: 14px; }
+  .tag.elec { background: #fff3c2; border-color: #f0d36a; color: #6b5310; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -69,16 +104,42 @@
   <p class="lead">Цифровой двойник по скану с телефона.</p>
   <div class="card">
     <div class="bar"><span class="dot"></span><b id="rname">Комната</b><span class="chip" id="area"></span><span class="right">3D ОБЗОР</span></div>
-    <div class="stage" id="stage"><div class="hint">Нажми на свет, чтобы переключить его</div></div>
+    <div class="stage" id="stage">
+      <div class="gizmo-bar" id="gizmobar">
+        <button data-m="move" class="on" title="Двигать по полу (1)">✥ Двигать</button>
+        <button data-m="height" title="Поднять / опустить (2)">↕ Высота</button>
+        <button data-m="rotate" title="Крутить (3)">⟳ Крутить</button>
+        <button data-m="scale" title="Размер (4)">⤢ Размер</button>
+        <button id="magnet" class="on" title="Прилипать к стенам, если отпустить вплотную (M)">🧲 Магнит</button>
+      </div>
+      <div class="hint">Клик — выбрать предмет · тяни за стрелки и кольцо · 1 двигать, 2 высота, 3 крутить, 4 размер</div>
+    </div>
     <div class="tools">
       <button id="persp" class="on">Перспектива</button>
       <button id="top">Сверху</button>
       <span class="sp"></span>
+      <span class="chip" id="power"></span>
       <button id="zin" title="Ближе">+</button>
       <button id="zout" title="Дальше">−</button>
       <button id="reset" title="Сбросить вид">↺</button>
     </div>
     <div class="foot"><span>Перетаскивание — вращение</span><span>Колесо / щипок — масштаб</span></div>
+  </div>
+  <div class="editor">
+    <div class="panel">
+      <h3>Добавить <small>появится в центре комнаты, дальше перетащи мышью</small></h3>
+      <div id="palette"></div>
+    </div>
+    <div class="panel">
+      <h3 id="seltitle">Свойства <small>кликни предмет в 3D или в списке</small></h3>
+      <div id="props"><div class="empty">Ничего не выбрано</div></div>
+      <div class="kbd"><kbd>1</kbd> двигать · <kbd>2</kbd> высота · <kbd>3</kbd> крутить · <kbd>4</kbd> размер · <kbd>M</kbd> магнит · <kbd>R</kbd> +45°, <kbd>⇧R</kbd> +15° · <kbd>←↑→↓</kbd> сдвиг на 5 см ·
+        <kbd>Delete</kbd> удалить · <kbd>⌘S</kbd> сохранить · <kbd>Esc</kbd> снять выбор</div>
+    </div>
+  </div>
+  <div class="tools" style="padding:14px 0 0;border:0">
+    <b style="font-size:14px">Предметы</b>
+    <div class="savebar"><span id="savestate">без изменений</span><button id="download">Скачать room.json</button><button class="primary" id="save">Сохранить</button></div>
   </div>
   <div class="list" id="list"></div>
 </div>
@@ -88,6 +149,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
+import { TransformControls } from 'three/addons/controls/TransformControls.js'
 
 async function loadRoom() {
   const inline = document.getElementById('room-data').textContent.trim()
@@ -96,8 +158,11 @@ async function loadRoom() {
   return (await fetch(url)).json()
 }
 
+// внутри единой страницы (iframe) шапка не нужна — сразу сцена
+if (window.top !== window) document.documentElement.classList.add('embedded')
 const room = await loadRoom()
-const { width: W, depth: D, height: H } = room.size
+let { width: W, depth: D, height: H } = room.size
+room.openings ||= []
 document.getElementById('rname').textContent = room.name
 document.getElementById('crumbs').textContent = `Моя квартира / ${room.name}`
 document.getElementById('area').textContent = `${(W * D).toFixed(0)} м²`
@@ -152,100 +217,144 @@ function box(w, h, d, color, x, y, z, parent = scene) {
   return m
 }
 
-function label(text, pos, cls = 'tag') {
+function label(text, pos, cls = 'tag', parent = scene) {
   const el = document.createElement('div')
   el.className = cls
   el.textContent = text
   const o = new CSS2DObject(el)
   o.position.copy(pos)
-  scene.add(o)
+  parent.add(o)
   return o
 }
 
-// ── пол ──────────────────────────────────────────────────────────────────
-function planks() {
+// ── пол и стены: перестраиваются целиком при правке размеров, цвета и проёмов ───────────
+const FLOORS = {
+  planks: { name: 'Паркет', tones: ['#d9b986', '#d3b17c', '#ddbf8e', '#cfac77'], w: 256, h: 64, stagger: true },
+  oak_dark: { name: 'Тёмный дуб', tones: ['#7a5636', '#6f4e31', '#80603f', '#6a4a2e'], w: 256, h: 64, stagger: true },
+  tile: { name: 'Плитка', tones: ['#e8e6e1', '#e2e0db'], w: 128, h: 128 },
+  carpet: { name: 'Ковролин', tones: ['#9aa0a6'], w: 512, h: 512, noise: true },
+  concrete: { name: 'Бетон', tones: ['#b9b8b3'], w: 512, h: 512, noise: true },
+}
+function floorTexture(kind) {
+  const f = FLOORS[kind] || FLOORS.planks
   const c = document.createElement('canvas')
   c.width = 512; c.height = 512
   const g = c.getContext('2d')
-  const tones = ['#d9b986', '#d3b17c', '#ddbf8e', '#cfac77']
-  for (let row = 0; row < 8; row++) {
-    let x = -(row % 2) * 128
+  for (let row = 0; row * f.h < 512; row++) {
+    let x = f.stagger ? -(row % 2) * 128 : 0
     while (x < 512) {
-      g.fillStyle = tones[(row * 7 + x) & 3]
-      g.fillRect(x, row * 64, 256, 64)
-      g.strokeStyle = 'rgba(120,85,40,.18)'
-      g.strokeRect(x + 0.5, row * 64 + 0.5, 256, 64)
-      x += 256
+      g.fillStyle = f.tones[(row * 7 + x / 64) % f.tones.length | 0]
+      g.fillRect(x, row * f.h, f.w, f.h)
+      g.strokeStyle = 'rgba(80,60,40,.16)'
+      g.strokeRect(x + 0.5, row * f.h + 0.5, f.w, f.h)
+      x += f.w
     }
   }
+  if (f.noise) for (let k = 0; k < 9000; k++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.06})`; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2) }
   const t = new THREE.CanvasTexture(c)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.repeat.set(W / 2.2, D / 2.2)
   t.colorSpace = THREE.SRGBColorSpace
   return t
 }
-const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.06, D), new THREE.MeshStandardMaterial({ map: planks(), roughness: 0.75 }))
-floor.position.set(W / 2, -0.03, -D / 2)
-floor.receiveShadow = true
-scene.add(floor)
 
-// ── стены с проёмами; ближние к камере становятся низкими (кукольный домик) ─────────
-// порядок задаёт номера: W01 дальняя (север), дальше по часовой
-const WALLS = [
-  { id: 'N', a: [W, D], b: [0, D], n: [0, -1] },
-  { id: 'E', a: [W, 0], b: [W, D], n: [-1, 0] },
-  { id: 'S', a: [0, 0], b: [W, 0], n: [0, 1] },
-  { id: 'W', a: [0, D], b: [0, 0], n: [1, 0] },
-]
-const wallMat = mat('#ede9e0', 0.95)
 const T = 0.12
 const wallGroups = []
-WALLS.forEach((wall, k) => {
-  const g = new THREE.Group()
-  const len = Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1])
-  const dir = [(wall.b[0] - wall.a[0]) / len, (wall.b[1] - wall.a[1]) / len]
-  const ops = room.openings.filter(o => o.wall === wall.id).map(o => {
-    const along = (o.x - wall.a[0]) * dir[0] + (o.y - wall.a[1]) * dir[1]
-    return { ...o, s: Math.max(0, along - o.w / 2), e: Math.min(len, along + o.w / 2) }
-  }).sort((p, q) => p.s - q.s)
-  // куски стены между проёмами, над проёмами и под окнами
-  const pieces = []
-  let s = 0
-  for (const o of ops) {
-    if (o.s > s) pieces.push([s, o.s, 0, H])
-    pieces.push([o.s, o.e, Math.min(H, o.elevation + o.h), H])
-    if (o.elevation > 0) pieces.push([o.s, o.e, 0, o.elevation])
-    s = o.e
-  }
-  if (s < len) pieces.push([s, len, 0, H])
-  for (const [p0, p1, z0, z1] of pieces) {
-    if (p1 - p0 < 0.01 || z1 - z0 < 0.01) continue
-    const mid = (p0 + p1) / 2
-    const m = box(p1 - p0, z1 - z0, T, wallMat, 0, z0, 0, g)
-    m.position.x = wall.a[0] + dir[0] * mid - wall.n[0] * T / 2
-    m.position.z = -(wall.a[1] + dir[1] * mid - wall.n[1] * T / 2)
-    m.rotation.y = Math.atan2(dir[1], dir[0])
-    m.userData.full = { z0, z1 }
-  }
-  for (const o of ops) {
-    const along = (o.s + o.e) / 2
-    const pos = P(wall.a[0] + dir[0] * along, wall.a[1] + dir[1] * along, o.elevation + o.h * 0.75)
-    label(`${o.id}${o.leads_to ? ' — ' + o.leads_to : ''}`, pos)
-    if (o.type === 'window') {
-      const glass = new THREE.Mesh(new THREE.PlaneGeometry(o.e - o.s, o.h),
-        new THREE.MeshStandardMaterial({ color: '#cfe3ee', transparent: true, opacity: 0.45 }))
-      glass.position.copy(P(wall.a[0] + dir[0] * along, wall.a[1] + dir[1] * along, o.elevation + o.h / 2))
-      glass.rotation.y = Math.atan2(dir[1], dir[0])
-      g.add(glass)
+let shell = new THREE.Group()
+scene.add(shell)
+
+function wallsOf() {
+  // порядок задаёт номера: W01 дальняя (север), дальше по часовой
+  return [
+    { id: 'N', a: [W, D], b: [0, D], n: [0, -1] },
+    { id: 'E', a: [W, 0], b: [W, D], n: [-1, 0] },
+    { id: 'S', a: [0, 0], b: [W, 0], n: [0, 1] },
+    { id: 'W', a: [0, D], b: [0, 0], n: [1, 0] },
+  ]
+}
+
+// CSS2D-подписи сами уходят из DOM, только если удалить их напрямую — у вложенных чистим вручную
+function dropLabels(obj) {
+  obj.traverse(x => { if (x.isCSS2DObject && x.element.parentNode) x.element.parentNode.removeChild(x.element) })
+}
+
+function buildShell() {
+  dropLabels(shell)
+  scene.remove(shell)
+  shell = new THREE.Group()
+  scene.add(shell)
+  wallGroups.length = 0
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.06, D), new THREE.MeshStandardMaterial({ map: floorTexture(room.floor), roughness: 0.75 }))
+  floor.position.set(W / 2, -0.03, -D / 2)
+  floor.receiveShadow = true
+  shell.add(floor)
+  const wallMat = mat(room.wall_color || '#ede9e0', 0.95)
+  wallsOf().forEach((wall, k) => {
+    const g = new THREE.Group()
+    const len = Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1])
+    const dir = [(wall.b[0] - wall.a[0]) / len, (wall.b[1] - wall.a[1]) / len]
+    const ops = room.openings.filter(o => o.wall === wall.id).map(o => {
+      const along = (o.x - wall.a[0]) * dir[0] + (o.y - wall.a[1]) * dir[1]
+      return { ...o, src: o, s: Math.max(0, along - o.w / 2), e: Math.min(len, along + o.w / 2) }
+    }).sort((p, q) => p.s - q.s)
+    // куски стены между проёмами, над проёмами и под окнами
+    const pieces = []
+    let s = 0
+    for (const o of ops) {
+      if (o.s > s) pieces.push([s, o.s, 0, H])
+      pieces.push([o.s, o.e, Math.min(H, o.elevation + o.h), H])
+      if (o.elevation > 0) pieces.push([o.s, o.e, 0, o.elevation])
+      s = Math.max(s, o.e)
     }
-  }
-  const tag = label(`W0${k + 1}`, P((wall.a[0] + wall.b[0]) / 2, (wall.a[1] + wall.b[1]) / 2, H + 0.35))
-  scene.add(g)
-  wallGroups.push({ wall, g, tag })
-})
-label(`${W.toFixed(1)} м`, P(W / 2, -0.6, 0), 'tag dim')
-label(`${D.toFixed(1)} м`, P(W + 0.6, D / 2, 0), 'tag dim')
-label(`${H.toFixed(1)} м`, P(0, 0, H / 2), 'tag dim')
+    if (s < len) pieces.push([s, len, 0, H])
+    const ang = Math.atan2(dir[1], dir[0])
+    const at = (along, z) => P(wall.a[0] + dir[0] * along, wall.a[1] + dir[1] * along, z)
+    for (const [p0, p1, z0, z1] of pieces) {
+      if (p1 - p0 < 0.01 || z1 - z0 < 0.01) continue
+      const mid = (p0 + p1) / 2
+      const m = box(p1 - p0, z1 - z0, T, wallMat, 0, z0, 0, g)
+      m.position.x = wall.a[0] + dir[0] * mid - wall.n[0] * T / 2
+      m.position.z = -(wall.a[1] + dir[1] * mid - wall.n[1] * T / 2)
+      m.rotation.y = ang
+      m.userData.full = { z0, z1 }
+      m.userData.wall = wall.id
+    }
+    for (const o of ops) {
+      const along = (o.s + o.e) / 2, ow = o.e - o.s
+      const tag = label(`${o.id}${o.leads_to ? ' — ' + o.leads_to : ''}`, at(along, o.elevation + o.h + 0.12), 'tag', g)
+      tag.element.style.pointerEvents = 'auto'; tag.element.style.cursor = 'pointer'
+      tag.element.onclick = () => selectOpening(o.src)
+      if (o.type === 'window') {
+        const glass = new THREE.Mesh(new THREE.PlaneGeometry(ow, o.h),
+          new THREE.MeshStandardMaterial({ color: '#cfe3ee', transparent: true, opacity: 0.45, side: THREE.DoubleSide }))
+        glass.position.copy(at(along, o.elevation + o.h / 2)); glass.rotation.y = ang
+        g.add(glass)
+        const sill = box(ow + 0.06, 0.03, T + 0.08, '#f4f3ef', 0, o.elevation - 0.03, 0, g)
+        sill.position.x = at(along).x - wall.n[0] * T / 2; sill.position.z = at(along).z + wall.n[1] * T / 2; sill.rotation.y = ang
+      }
+      if (o.type === 'door') {
+        // полотно приоткрыто внутрь комнаты, петли с начала проёма
+        const hinge = new THREE.Group()
+        hinge.position.copy(at(o.s, 0)); hinge.rotation.y = ang
+        const leaf = box(ow - 0.02, o.h - 0.01, 0.04, o.color || '#f2f0ea', (ow - 0.02) / 2, 0, 0, hinge)
+        leaf.position.z = 0
+        const pivot = new THREE.Group(); pivot.add(leaf); hinge.add(pivot)
+        pivot.rotation.y = -(o.open ?? 25) * Math.PI / 180 * (wall.n[0] + wall.n[1] < 0 ? -1 : 1)
+        g.add(hinge)
+      }
+      for (const m of g.children) if (m.isMesh && !m.userData.full) m.userData.opening = o.src
+    }
+    const tag = label(`W0${k + 1}`, P((wall.a[0] + wall.b[0]) / 2, (wall.a[1] + wall.b[1]) / 2, H + 0.35), 'tag', g)
+    shell.add(g)
+    wallGroups.push({ wall, g, tag })
+  })
+  label(`${W.toFixed(2)} м`, P(W / 2, -0.6, 0), 'tag dim', shell)
+  label(`${D.toFixed(2)} м`, P(W + 0.6, D / 2, 0), 'tag dim', shell)
+  label(`${H.toFixed(2)} м`, P(0, 0, H / 2), 'tag dim', shell)
+  document.getElementById('area').textContent = `${(W * D).toFixed(1)} м²`
+}
+let selectOpening = () => {}
+buildShell()
 
 function cutaway() {
   const cam = camera.position
@@ -256,7 +365,7 @@ function cutaway() {
     tag.position.y = low == null ? H + 0.35 : low + 0.25 // подпись опущенной стены — у её кромки
     g.children.forEach(m => {
       const full = m.userData.full
-      if (!full) return
+      if (!full) { if (!m.isCSS2DObject) m.visible = low == null || camera === ortho; return }
       const z1 = low == null ? full.z1 : Math.min(full.z1, low)
       const h = Math.max(0.001, z1 - full.z0)
       m.visible = z1 > full.z0
@@ -274,14 +383,20 @@ function cutaway() {
 // ── предметы ─────────────────────────────────────────────────────────────
 const AGAINST = new Set(['sofa', 'sofa_corner', 'bed', 'wardrobe', 'cabinet', 'wall_cabinet', 'shelf', 'bookcase', 'tv',
   'tv_stand', 'kitchen_counter', 'fridge', 'oven_column', 'stove', 'sink', 'radiator', 'ac_unit', 'curtain', 'mirror',
-  'picture', 'desk', 'bar_counter'])
+  'picture', 'desk', 'bar_counter', 'outlet', 'switch', 'washing_machine', 'pc'])
 const ROT = { S: Math.PI, N: 0, W: Math.PI / 2, E: -Math.PI / 2 } // спинка (локальная −z) к своей стене
 
+// поворот: по умолчанию спиной к своей стене; o.rot (градусы, против часовой сверху) — свободный поворот
+const WALL_DEG = { N: 0, W: 90, S: 180, E: 270 }
+const angleOf = o => (o.rot != null ? o.rot : WALL_DEG[o.wall] ?? 0) * Math.PI / 180
+
 function placeAgainst(o) {
-  if (!AGAINST.has(o.category)) return { x: o.x, y: o.y }
+  if (o.rot != null) return { x: o.x, y: o.y }
+  if (!AGAINST.has(o.category) && o.mount !== 'wall') return { x: o.x, y: o.y }
   const gap = o.d / 2 + 0.02
   const near = { S: o.y, N: D - o.y, W: o.x, E: W - o.x }[o.wall]
-  if (near > 1.2) return { x: o.x, y: o.y }
+  // вплотную ставим, только если и так почти у стены (зазор < 15 см); иначе — ровно где поставили
+  if (near - o.d / 2 > 0.15 && o.mount !== 'wall') return { x: o.x, y: o.y }
   return {
     S: { x: o.x, y: gap }, N: { x: o.x, y: D - gap }, W: { x: gap, y: o.y }, E: { x: W - gap, y: o.y },
   }[o.wall]
@@ -302,6 +417,13 @@ function stripes(color) {
   t.colorSpace = THREE.SRGBColorSpace
   return t
 }
+
+// модели, которые сами учитывают elevation внутри; остальные поднимаются группой
+const Z0_INSIDE = new Set(['tv', 'monitor', 'picture', 'curtain', 'outlet', 'switch', 'lamp_floor', 'lamp_table', 'lamp_pendant',
+  'ac_unit', 'radiator', 'fridge', 'washing_machine', 'pc', 'router', 'speaker', 'heater', 'mirror'])
+const isZ0Inside = o => Z0_INSIDE.has(o.category) || !KNOWN_MODELS.has(o.category)
+const KNOWN_MODELS = new Set(['sofa', 'sofa_corner', 'table', 'coffee_table', 'desk', 'kitchen_island', 'rug', 'plant', 'column', 'bed',
+  'office_chair', 'chair', 'armchair', 'shelf', 'bookcase', 'wardrobe', ...Z0_INSIDE])
 
 function build(o) {
   const g = new THREE.Group()
@@ -412,46 +534,635 @@ function build(o) {
       for (let k = 0; k < folds; k++) box(w / folds + 0.01, h, 0.04, c, -w / 2 + (k + 0.5) * w / folds, z0, (k % 2 ? 0.03 : -0.02), g)
       break
     }
+    case 'outlet': case 'switch': {
+      box(w, h, 0.015, '#f7f6f2', 0, z0, -d / 2 + 0.008, g)
+      if (o.category === 'outlet') for (const sx of [-1, 1]) box(0.008, 0.02, 0.006, '#555', sx * 0.012, z0 + h / 2 - 0.01, -d / 2 + 0.018, g)
+      else box(w * 0.5, h * 0.6, 0.008, '#e6e4de', 0, z0 + h * 0.2, -d / 2 + 0.02, g)
+      break
+    }
+    case 'lamp_floor': case 'lamp_table': {
+      const pole = o.category === 'lamp_floor' ? h - 0.3 : h * 0.6
+      box(0.24, 0.03, 0.24, '#2a2b29', 0, z0, 0, g)
+      box(0.025, pole, 0.025, '#2a2b29', 0, z0 + 0.03, 0, g)
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.24, 20), mat('#efe6d2', 0.6))
+      shade.position.y = z0 + pole + 0.12
+      shade.castShadow = true
+      g.add(shade)
+      const bulb = new THREE.PointLight(0xffe2a8, 0, 4, 1.6)
+      bulb.position.y = z0 + pole + 0.08
+      g.add(bulb)
+      lights.push({ bulb, shade, o })
+      break
+    }
+    case 'ac_unit':
+      box(w, h, d, '#f4f4f1', 0, z0, 0, g)
+      box(w * 0.9, 0.02, 0.02, '#c8c8c4', 0, z0 + 0.04, d / 2, g)
+      break
+    case 'radiator': {
+      const n = Math.max(4, Math.round(w / 0.08))
+      for (let k = 0; k < n; k++) box(w / n - 0.012, h, d, '#f1f0ec', -w / 2 + (k + 0.5) * w / n, z0, 0, g)
+      break
+    }
+    case 'fridge': case 'washing_machine': case 'pc': case 'router': case 'speaker': case 'heater':
+      box(w, h, d, c, 0, z0, 0, g)
+      if (o.category === 'fridge') box(0.02, h * 0.3, 0.03, '#9a9a96', w / 2 - 0.08, z0 + h * 0.5, d / 2 + 0.015, g)
+      if (o.category === 'washing_machine') {
+        const door = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.3, w * 0.3, 0.03, 28), mat('#2b3438', 0.3))
+        door.rotation.x = Math.PI / 2; door.position.set(0, z0 + h * 0.45, d / 2 + 0.015); g.add(door)
+      }
+      break
+    case 'mirror':
+      box(w, h, 0.02, new THREE.MeshStandardMaterial({ color: '#dfe8ec', metalness: 0.8, roughness: 0.08 }), 0, z0, -d / 2 + 0.01, g)
+      break
     default:
       box(w, Math.max(0.05, h), d, c, 0, z0, 0, g)
   }
+  if (o.electric) {
+    const top = o.category === 'lamp_pendant' ? H - 0.15 : z0 + Math.max(h, 0.1) + (o.mount === 'wall' ? 0.12 : 0.18)
+    label(`⚡${o.power_w ? ' ' + o.power_w + ' Вт' : ''}`, new THREE.Vector3(0, top, 0), 'tag elec', g)
+  }
   const pos = placeAgainst(o)
   g.position.copy(P(pos.x, pos.y))
-  g.rotation.y = ROT[o.wall] ?? 0
+  if (!isZ0Inside(o)) g.position.y = z0  // модели без своей высоты поднимаем целиком
+  g.rotation.y = angleOf(o)
   g.userData.o = o
   scene.add(g)
   meshesById.set(o.id, g)
 }
 room.objects.forEach(build)
 
-// светильники: одна метка «Свет» на все подвесы, клик переключает
-if (lights.length) {
-  const cx = lights.reduce((s, l) => s + l.o.x, 0) / lights.length
-  const cy = lights.reduce((s, l) => s + l.o.y, 0) / lights.length
-  const tag = label('☀ Свет', P(cx, cy, H - 0.2), 'tag light')
-  let on = false
-  tag.element.onclick = () => {
-    on = !on
-    tag.element.classList.toggle('on', on)
-    lights.forEach(l => { l.bulb.intensity = on ? 2.2 : 0; l.shade.material.emissive?.set(on ? '#7a5a1a' : '#000') })
+// ── свет: одна метка «Свет» на все лампы, клик переключает ────────────────
+let lightsOn = false, lightTag = null
+function syncLights() {
+  if (lights.length && !lightTag) {
+    lightTag = label('☀ Свет', P(W / 2, D / 2, H - 0.2), 'tag light')
+    lightTag.element.onclick = () => { lightsOn = !lightsOn; syncLights() }
   }
+  if (lightTag) lightTag.element.classList.toggle('on', lightsOn)
+  lights.forEach(l => { l.bulb.intensity = lightsOn ? 2.2 : 0; l.shade.material.emissive?.set(lightsOn ? '#7a5a1a' : '#000') })
+}
+syncLights()
+
+// ── редактор ─────────────────────────────────────────────────────────────
+// Каталог: что можно добавить. el — электроприбор по умолчанию, p — мощность, Вт.
+const CATALOG = {
+  'Мебель': [
+    ['bed', 'Кровать', 1.6, 2.0, 0.95, '#8e9296'], ['sofa', 'Диван', 2.0, 0.9, 0.85, '#5b6370'], ['desk', 'Стол', 1.2, 0.6, 0.75, '#c9a571'],
+    ['table', 'Обеденный стол', 1.4, 0.8, 0.75, '#c9a571'], ['office_chair', 'Кресло', 0.6, 0.6, 1.2, '#2d2f2c'], ['chair', 'Стул', 0.45, 0.5, 0.9, '#8b6a45'],
+    ['wardrobe', 'Шкаф', 1.2, 0.6, 2.1, '#d9d4c8'], ['shelf', 'Стеллаж', 1.0, 0.4, 1.8, '#c9a571'], ['cabinet', 'Тумба', 0.5, 0.4, 0.5, '#cdb08a'],
+  ],
+  'Электрика': [
+    ['outlet', 'Розетка', 0.08, 0.04, 0.08, '#f7f6f2', 'wall', 0.3, true, 0], ['switch', 'Выключатель', 0.08, 0.04, 0.08, '#f7f6f2', 'wall', 0.9, true, 0],
+    ['lamp_pendant', 'Люстра', 0.4, 0.4, 0.3, '#1f211e', 'ceiling', 2.2, true, 60], ['lamp_floor', 'Торшер', 0.4, 0.4, 1.6, '#efe6d2', 'floor', 0, true, 40],
+    ['lamp_table', 'Настольная лампа', 0.25, 0.25, 0.45, '#efe6d2', 'floor', 0.75, true, 10],
+    ['tv', 'Телевизор', 1.2, 0.06, 0.7, '#141614', 'wall', 1.0, true, 120], ['monitor', 'Монитор', 0.6, 0.2, 0.36, '#111311', 'floor', 0.75, true, 40],
+    ['pc', 'Компьютер', 0.22, 0.45, 0.45, '#1c1d1b', 'floor', 0, true, 350], ['ac_unit', 'Кондиционер', 0.85, 0.25, 0.3, '#f4f4f1', 'wall', 2.2, true, 900],
+    ['fridge', 'Холодильник', 0.6, 0.65, 1.8, '#e9e9e6', 'floor', 0, true, 150], ['washing_machine', 'Стиральная машина', 0.6, 0.55, 0.85, '#f1f1ee', 'floor', 0, true, 2000],
+    ['radiator', 'Батарея', 0.8, 0.1, 0.6, '#f1f0ec', 'wall', 0.15, false, 0], ['heater', 'Обогреватель', 0.5, 0.25, 0.6, '#e8e7e2', 'floor', 0, true, 1500],
+    ['router', 'Роутер', 0.2, 0.15, 0.04, '#1c1d1b', 'floor', 0.75, true, 12], ['speaker', 'Колонка', 0.2, 0.2, 0.3, '#2a2b29', 'floor', 0, true, 30],
+  ],
+  'Декор': [
+    ['picture', 'Картина / постер', 0.7, 0.02, 0.5, '#3f7cbc', 'wall', 1.4], ['mirror', 'Зеркало', 0.6, 0.02, 1.2, '#dfe8ec', 'wall', 0.6],
+    ['curtain', 'Шторы', 1.6, 0.1, 2.5, '#9c8b87', 'wall', 0.05], ['plant', 'Растение', 0.5, 0.5, 1.0, '#5d7b4d'], ['rug', 'Ковёр', 2.0, 1.4, 0.01, '#4f6f6c'],
+  ],
+}
+const CATEGORY_NAMES = Object.fromEntries(Object.values(CATALOG).flat().map(([k, n]) => [k, n]))
+const WALLS_CYCLE = ['S', 'W', 'N', 'E']
+let selected = null, selectedOp = null, selectedWall = null, dirty = false
+const wallHandle = new THREE.Object3D()
+scene.add(wallHandle)
+// призрак стены: показывает, куда она встанет, пока тянешь стрелку
+const ghost = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x3fae5a, transparent: true, opacity: 0.28, depthWrite: false }))
+ghost.visible = false
+scene.add(ghost)
+const ghostEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x2f8f4a }))
+ghost.add(ghostEdge)
+let ghostTag = null
+function showGhost(wall, x, y) {
+  const along = wall === 'N' || wall === 'S'
+  const pos = along ? P(W / 2, y, H / 2) : P(x, D / 2, H / 2)
+  ghost.position.copy(pos)
+  ghost.scale.set(along ? W : 0.14, H, along ? 0.14 : D)
+  ghost.visible = true
+  const v = { E: x, W: W - x, N: y, S: D - y }[wall]
+  if (!ghostTag) ghostTag = label('', new THREE.Vector3(), 'tag elec')
+  ghostTag.position.copy(pos).setY(H + 0.3)
+  ghostTag.element.textContent = `${along ? 'глубина' : 'ширина'} ${v.toFixed(2)} м`
+  ghostTag.visible = true
+}
+function hideGhost() { ghost.visible = false; if (ghostTag) ghostTag.visible = false }
+const OPENINGS = [['door', 'Дверь', 0.85, 2.05, 0], ['window', 'Окно', 1.4, 1.4, 0.85], ['arch', 'Проём / арка', 1.0, 2.1, 0]]
+
+function markDirty() {
+  dirty = true
+  document.getElementById('savestate').textContent = 'есть несохранённые изменения'
 }
 
-// ── список предметов ─────────────────────────────────────────────────────
-const list = document.getElementById('list')
-for (const o of room.objects) {
-  const el = document.createElement('div')
-  el.className = 'item'
-  el.innerHTML = `<span class="sw" style="background:${o.color}"></span>${o.name}<small>${o.id} · ${o.w}×${o.d}×${o.h} м · ${o.material || ''}</small>`
-  el.onclick = () => {
-    document.querySelectorAll('.item').forEach(i => i.classList.remove('sel'))
-    el.classList.add('sel')
-    const g = meshesById.get(o.id)
-    g.traverse(m => m.material?.emissive?.set('#2c4a2f'))
-    setTimeout(() => g.traverse(m => m.material?.emissive?.set('#000')), 900)
+function rebuild(o) {
+  const old = meshesById.get(o.id)
+  if (old) {
+    dropLabels(old)
+    scene.remove(old)
+    for (let k = lights.length - 1; k >= 0; k--) if (lights[k].o === o) lights.splice(k, 1)
   }
-  list.appendChild(el)
+  meshesById.delete(o.id)
+  if (room.objects.includes(o)) build(o)
+  syncLights()
+  highlight()
 }
+
+let selBox = null
+function highlight() {
+  if (selBox) { scene.remove(selBox); selBox = null }
+  if (selectedWall) {
+    attachGizmo()
+    const a = { N: [0, D, W, D], S: [0, 0, W, 0], E: [W, 0, W, D], W: [0, 0, 0, D] }[selectedWall]
+    selBox = new THREE.Box3Helper(new THREE.Box3(P(a[0] - 0.08, a[3] + 0.08, 0), P(a[2] + 0.08, a[1] - 0.08, H)), 0x2f8f4a)
+    scene.add(selBox)
+    return
+  }
+  if (selectedOp) {
+    attachGizmo()
+    const { x, y, w, h, elevation } = selectedOp, along = selectedOp.wall === 'N' || selectedOp.wall === 'S'
+    const b = new THREE.Box3(P(x - (along ? w / 2 : 0.1), y + (along ? 0.1 : w / 2), elevation), P(x + (along ? w / 2 : 0.1), y - (along ? 0.1 : w / 2), elevation + h))
+    selBox = new THREE.Box3Helper(b, 0x2f8f4a)
+    scene.add(selBox)
+    return
+  }
+  attachGizmo()
+  const g = selected && meshesById.get(selected.id)
+  if (!g) return
+  selBox = new THREE.BoxHelper(g, 0x2f8f4a)
+  scene.add(selBox)
+}
+
+function placeWallHandle() {
+  const mid = { N: [W / 2, D], S: [W / 2, 0], E: [W, D / 2], W: [0, D / 2] }[selectedWall]
+  wallHandle.position.copy(P(mid[0], mid[1], 0.05))
+}
+function selectWall(id) {
+  selected = null; selectedOp = null; selectedWall = id
+  placeWallHandle()
+  highlight(); renderProps(); renderList()
+}
+
+selectOpening = op => {
+  selected = null; selectedWall = null; selectedOp = op
+  highlight(); renderProps(); renderList()
+}
+
+// ── указатели на выбранном: стрелки по полу, стрелка высоты, кольцо поворота ─────────
+const gizmo = new TransformControls(camera, renderer.domElement)
+gizmo.setSize(1.1)
+gizmo.setTranslationSnap(0.05)
+gizmo.setRotationSnap(THREE.MathUtils.degToRad(15))
+gizmo.setScaleSnap(0.05)
+scene.add(gizmo)
+let gizmoMode = 'move', gizmoUsed = false
+function applyGizmoMode() {
+  gizmo.setMode({ rotate: 'rotate', scale: 'scale' }[gizmoMode] || 'translate')
+  gizmo.showX = gizmo.showZ = gizmoMode === 'move' || gizmoMode === 'scale'
+  gizmo.showY = gizmoMode !== 'move'
+  document.querySelectorAll('#gizmobar button[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === gizmoMode))
+}
+document.querySelectorAll('#gizmobar button[data-m]').forEach(b => b.onclick = () => { gizmoMode = b.dataset.m; applyGizmoMode() })
+const toggleMagnet = () => { magnet = !magnet; document.getElementById('magnet').classList.toggle('on', magnet) }
+document.getElementById('magnet').onclick = toggleMagnet
+applyGizmoMode()
+let gizmoStart = null
+gizmo.addEventListener('dragging-changed', e => {
+  controls.enabled = !e.value
+  if (selectedWall) { if (e.value) gizmoUsed = true; else { hideGhost(); resizeByWall(selectedWall) } return }
+  const o = selected, g = o && meshesById.get(o.id)
+  if (!g) return
+  if (e.value) { gizmoUsed = true; gizmoStart = { y: g.position.y }; return }
+  if (gizmoMode === 'move') {
+    o.x = +Math.min(W, Math.max(0, g.position.x)).toFixed(2)
+    o.y = +Math.min(D, Math.max(0, -g.position.z)).toFixed(2)
+  } else if (gizmoMode === 'height') {
+    const lift = g.position.y - (isZ0Inside(o) ? 0 : gizmoStart.y)
+    o.elevation = +Math.max(0, (isZ0Inside(o) ? (o.elevation || 0) : 0) + lift).toFixed(2)
+    if (!isZ0Inside(o)) o.elevation = +Math.max(0, g.position.y).toFixed(2)
+  } else if (gizmoMode === 'scale') {
+    // ручки размера: x — ширина, z — глубина, y — высота (в осях предмета)
+    o.w = +Math.max(0.03, o.w * g.scale.x).toFixed(2)
+    o.d = +Math.max(0.01, o.d * g.scale.z).toFixed(2)
+    o.h = +Math.max(0.01, o.h * g.scale.y).toFixed(2)
+  } else {
+    const deg = ((Math.round(THREE.MathUtils.radToDeg(g.rotation.y)) % 360) + 360) % 360
+    const wall = Object.entries(WALL_DEG).find(([, d]) => d === deg)?.[0]
+    if (wall) { o.wall = wall; delete o.rot } else o.rot = deg
+  }
+  constrain(o)
+  rebuild(o); renderProps(); renderList(); markDirty()
+})
+gizmo.addEventListener('objectChange', () => {
+  selBox?.update?.()
+  if (selected && gizmoMode === 'scale' && !selectedWall) {
+    const g = meshesById.get(selected.id)
+    document.getElementById('seltitle').innerHTML = `Свойства <small>${(selected.w * g.scale.x).toFixed(2)} × ${(selected.d * g.scale.z).toFixed(2)} × ${(selected.h * g.scale.y).toFixed(2)} м</small>`
+  }
+  if (selectedWall) {
+    const x = wallHandle.position.x, y = -wallHandle.position.z
+    showGhost(selectedWall, x, y)
+    const v = { E: x, W: W - x, N: y, S: D - y }[selectedWall]
+    document.getElementById('seltitle').innerHTML = `Стена ${selectedWall} <small>${selectedWall === 'E' || selectedWall === 'W' ? 'ширина' : 'глубина'} станет ${v.toFixed(2)} м</small>`
+  }
+})
+function attachGizmo() {
+  const g = selected && meshesById.get(selected.id)
+  if (selectedWall) {
+    gizmo.setMode('translate')
+    gizmo.showY = false
+    gizmo.showX = selectedWall === 'E' || selectedWall === 'W'
+    gizmo.showZ = !gizmo.showX
+    gizmo.attach(wallHandle)
+  } else if (g) { applyGizmoMode(); gizmo.attach(g) } else gizmo.detach()
+  document.getElementById('gizmobar').classList.toggle('show', !!g)
+}
+
+// стену тянут за стрелку: восточная и северная меняют ширину/глубину, западная и южная ещё и сдвигают всё внутри
+function resizeByWall(wall) {
+  const p = wallHandle.position, x = p.x, y = -p.z
+  let dx = 0, dy = 0
+  if (wall === 'E') room.size.width = Math.max(1, +x.toFixed(2))
+  if (wall === 'N') room.size.depth = Math.max(1, +y.toFixed(2))
+  if (wall === 'W') { dx = Math.min(x, W - 1); room.size.width = +(W - dx).toFixed(2) }
+  if (wall === 'S') { dy = Math.min(y, D - 1); room.size.depth = +(D - dy).toFixed(2) }
+  ;({ width: W, depth: D, height: H } = room.size)
+  for (const op of room.openings) {
+    op.x -= dx; op.y -= dy
+    if (op.wall === 'E') op.x = W; if (op.wall === 'N') op.y = D; if (op.wall === 'W') op.x = 0; if (op.wall === 'S') op.y = 0
+    op.x = Math.min(W, Math.max(0, op.x)); op.y = Math.min(D, Math.max(0, op.y))
+  }
+  for (const o of room.objects) {
+    o.x -= dx; o.y -= dy
+    // то, что стояло у сдвинутой стены, едет вместе с ней
+    if (o.wall === wall && (o.mount === 'wall' || AGAINST.has(o.category))) {
+      if (wall === 'E') o.x = W; if (wall === 'N') o.y = D; if (wall === 'W') o.x = 0; if (wall === 'S') o.y = 0
+    }
+    constrain(o, 0)
+  }
+  buildShell()
+  for (const o of room.objects) rebuild(o)
+  placeWallHandle()
+  renderProps(); markDirty()
+}
+
+function select(o) {
+  selected = o; selectedOp = null; selectedWall = null
+  highlight()
+  renderProps()
+  renderList()
+}
+
+function nextId() {
+  const n = Math.max(0, ...room.objects.map(o => parseInt(String(o.id).replace(/\D/g, '')) || 0)) + 1
+  return `O${String(n).padStart(2, '0')}`
+}
+
+function add(entry) {
+  const [category, name, w, d, h, color, mount = 'floor', elevation = 0, electric = false, power = 0] = entry
+  const o = { id: nextId(), category, name, color, material: '', mount, is_light: category.startsWith('lamp'), x: W / 2, y: D / 2,
+    w, d, h, elevation, wall: 'N', electric, power_w: power || undefined }
+  if (mount === 'wall') o.y = D - d / 2
+  room.objects.push(o)
+  constrain(o)
+  build(o)
+  syncLights()
+  select(o)
+  markDirty()
+}
+
+const palette = document.getElementById('palette')
+{
+  const box_ = document.createElement('div')
+  box_.className = 'group'
+  box_.innerHTML = '<b>Двери и окна</b><div class="chips"></div>'
+  for (const [type, name, w, h, elevation] of OPENINGS) {
+    const b = document.createElement('button')
+    b.textContent = name
+    b.onclick = () => {
+      const n = Math.max(0, ...room.openings.map(o => parseInt(String(o.id).replace(/\D/g, '')) || 0)) + 1
+      const op = { id: `P${String(n).padStart(2, '0')}`, type, wall: 'N', x: W / 2, y: D, w, h, elevation }
+      room.openings.push(op)
+      buildShell(); selectOpening(op); markDirty()
+    }
+    box_.lastChild.appendChild(b)
+  }
+  palette.appendChild(box_)
+}
+for (const [group, items] of Object.entries(CATALOG)) {
+  const box_ = document.createElement('div')
+  box_.className = 'group'
+  box_.innerHTML = `<b>${group}</b><div class="chips"></div>`
+  for (const entry of items) {
+    const b = document.createElement('button')
+    b.textContent = (entry[8] ? '⚡ ' : '') + entry[1]
+    b.onclick = () => add(entry)
+    box_.lastChild.appendChild(b)
+  }
+  palette.appendChild(box_)
+}
+
+const num = (v, def = 0) => { const x = parseFloat(String(v).replace(',', '.')); return Number.isFinite(x) ? x : def }
+function renderProps() {
+  const el = document.getElementById('props')
+  const o = selected
+  if (selectedOp) return renderOpening(el)
+  if (selectedWall) {
+    renderRoom(el)
+    const k = { N: 1, E: 2, S: 3, W: 4 }[selectedWall]
+    document.getElementById('seltitle').innerHTML = `Стена W0${k} (${selectedWall}) <small>тяни стрелку, чтобы двигать стену</small>`
+    return
+  }
+  if (!o) return renderRoom(el)
+  document.getElementById('seltitle').innerHTML = `Свойства <small>${o.id}</small>`
+  const cats = [...new Set([o.category, ...Object.keys(CATEGORY_NAMES)])]
+  el.innerHTML = `<div class="form">
+    <label>Название</label><input data-k="name" value="${(o.name || '').replace(/"/g, '&quot;')}">
+    <label>Тип</label><select data-k="category">${cats.map(c => `<option value="${c}" ${c === o.category ? 'selected' : ''}>${CATEGORY_NAMES[c] || c}</option>`).join('')}</select>
+    <label>Ш × Г × В, м</label><div class="nums"><input data-k="w" value="${o.w}"><input data-k="d" value="${o.d}"><input data-k="h" value="${o.h}"><span></span></div>
+    <label>Над полом, м</label><input data-k="elevation" value="${o.elevation || 0}">
+    <label>X, Y, м</label><div class="nums"><input data-k="x" value="${(+o.x).toFixed(2)}"><input data-k="y" value="${(+o.y).toFixed(2)}"><span></span><span></span></div>
+    <label>Спиной к стене</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === o.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
+    <label>Крепление</label><select data-k="mount">${['floor', 'wall', 'ceiling'].map(m => `<option value="${m}" ${m === o.mount ? 'selected' : ''}>${{ floor: 'пол', wall: 'стена', ceiling: 'потолок' }[m]}</option>`).join('')}</select>
+    <label>Цвет</label><input type="color" data-k="color" value="${/^#[0-9a-f]{6}$/i.test(o.color) ? o.color : '#8a8a80'}">
+    <label>Электроприбор</label><div><input type="checkbox" data-k="electric" ${o.electric ? 'checked' : ''}> <span class="dim">мощность</span> <input data-k="power_w" value="${o.power_w || ''}" placeholder="Вт" style="width:80px"></div>
+    <label>Заметка</label><input data-k="note" value="${(o.note || '').replace(/"/g, '&quot;')}" placeholder="например: на отдельной линии">
+  </div>
+  <div class="acts"><button data-a="rot">⟳ Повернуть</button><button data-a="dup">Копия</button><button data-a="del" class="danger">Удалить</button></div>`
+  el.querySelectorAll('[data-k]').forEach(inp => {
+    inp.onchange = () => {
+      const k = inp.dataset.k
+      if (['w', 'd', 'h', 'elevation', 'x', 'y'].includes(k)) o[k] = num(inp.value, o[k])
+      else if (k === 'power_w') o.power_w = num(inp.value) || undefined
+      else if (k === 'electric') o.electric = inp.checked
+      else o[k] = inp.value
+      constrain(o, 0)
+      rebuild(o); renderList(); markDirty()
+    }
+  })
+  el.querySelector('[data-a=rot]').onclick = () => rotate(o)
+  el.querySelector('[data-a=dup]').onclick = () => {
+    const c = { ...o, id: nextId(), x: Math.min(W, o.x + 0.3), y: Math.max(0, o.y - 0.3), name: o.name }
+    room.objects.push(c); build(c); syncLights(); select(c); markDirty()
+  }
+  el.querySelector('[data-a=del]').onclick = () => remove(o)
+}
+
+function bindForm(el, apply) {
+  el.querySelectorAll('[data-k]').forEach(inp => { inp.onchange = () => { apply(inp.dataset.k, inp.type === 'checkbox' ? inp.checked : inp.value); markDirty() } })
+}
+
+function renderRoom(el) {
+  document.getElementById('seltitle').innerHTML = 'Комната <small>выбери предмет или проём, чтобы править его</small>'
+  el.innerHTML = `<div class="form">
+    <label>Название</label><input data-k="name" value="${(room.name || '').replace(/"/g, '&quot;')}">
+    <label>Ш × Г × В, м</label><div class="nums"><input data-k="width" value="${W}"><input data-k="depth" value="${D}"><input data-k="height" value="${H}"><span></span></div>
+    <label>Цвет стен</label><input type="color" data-k="wall_color" value="${room.wall_color || '#ede9e0'}">
+    <label>Пол</label><select data-k="floor">${Object.entries(FLOORS).map(([k, f]) => `<option value="${k}" ${k === (room.floor || 'planks') ? 'selected' : ''}>${f.name}</option>`).join('')}</select>
+  </div>
+  <div class="acts"><button data-a="norm">⤓ Выровнять всё по полу и стенам</button></div>
+  <div class="kbd">Кликни стену в 3D — появится стрелка, тяни её, чтобы менять размер комнаты.<br>Проёмы: ${room.openings.map(o => `<a href="#" data-op="${o.id}">${o.id} ${{ door: 'дверь', window: 'окно', arch: 'арка' }[o.type] || o.type}</a>`).join(' · ') || 'нет'}</div>`
+  el.querySelectorAll('[data-op]').forEach(a => a.onclick = e => { e.preventDefault(); selectOpening(room.openings.find(o => o.id === a.dataset.op)) })
+  el.querySelector('[data-a=norm]').onclick = normalizeAll
+  bindForm(el, (k, v) => {
+    if (k === 'name') { room.name = v; document.getElementById('rname').textContent = v; return }
+    if (k === 'wall_color' || k === 'floor') { room[k] = v; buildShell(); return }
+    const val = Math.max(k === 'height' ? 2.0 : 1.0, num(v, room.size[k]))
+    room.size[k] = val
+    ;({ width: W, depth: D, height: H } = room.size)
+    for (const op of room.openings) { if (op.wall === 'E') op.x = W; if (op.wall === 'N') op.y = D; op.x = Math.min(W, op.x); op.y = Math.min(D, op.y) }
+    for (const o of room.objects) { o.x = Math.min(W, o.x); o.y = Math.min(D, o.y) }
+    buildShell()
+    for (const o of room.objects) rebuild(o)
+    renderProps()
+  })
+}
+
+function renderOpening(el) {
+  const op = selectedOp
+  const along = op.wall === 'N' || op.wall === 'S' ? 'x' : 'y'
+  document.getElementById('seltitle').innerHTML = `Проём <small>${op.id} · тащи по стене мышью</small>`
+  el.innerHTML = `<div class="form">
+    <label>Тип</label><select data-k="type">${OPENINGS.map(([t, n]) => `<option value="${t}" ${t === op.type ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    <label>Стена</label><select data-k="wall">${['N', 'E', 'S', 'W'].map(w => `<option ${w === op.wall ? 'selected' : ''}>${w}</option>`).join('')}</select>
+    <label>Центр вдоль стены, м</label><input data-k="along" value="${(+op[along]).toFixed(2)}">
+    <label>Ширина × высота</label><div class="nums"><input data-k="w" value="${op.w}"><input data-k="h" value="${op.h}"><span></span><span></span></div>
+    <label>От пола, м</label><input data-k="elevation" value="${op.elevation || 0}">
+    ${op.type === 'door' ? `<label>Открыта на, °</label><input data-k="open" value="${op.open ?? 25}">` : ''}
+    <label>Куда ведёт</label><input data-k="leads_to" value="${op.leads_to || ''}" placeholder="коридор, балкон…">
+  </div>
+  <div class="acts"><button data-a="del" class="danger">Удалить проём</button><button data-a="back">← Комната</button></div>`
+  bindForm(el, (k, v) => {
+    if (k === 'wall') { op.wall = v; Object.assign(op, { N: { y: D, x: W / 2 }, S: { y: 0, x: W / 2 }, E: { x: W, y: D / 2 }, W: { x: 0, y: D / 2 } }[v]) }
+    else if (k === 'along') op[along] = Math.min(along === 'x' ? W : D, Math.max(0, num(v, op[along])))
+    else if (['w', 'h', 'elevation', 'open'].includes(k)) op[k] = num(v, op[k])
+    else op[k] = v
+    buildShell(); highlight(); renderProps()
+  })
+  el.querySelector('[data-a=del]').onclick = () => { room.openings.splice(room.openings.indexOf(op), 1); selectedOp = null; buildShell(); highlight(); renderProps(); markDirty() }
+  el.querySelector('[data-a=back]').onclick = () => select(null)
+}
+
+function rotate(o, step = 45) {
+  if (o.mount === 'wall') {
+    // настенное переезжает на следующую стену по часовой
+    o.wall = WALLS_CYCLE[(WALLS_CYCLE.indexOf(o.wall) + 1) % 4] || 'N'
+    const k = 0.5
+    if (o.wall === 'S') { o.y = 0; o.x = W * k } else if (o.wall === 'N') { o.y = D; o.x = W * k }
+    else if (o.wall === 'W') { o.x = 0; o.y = D * k } else { o.x = W; o.y = D * k }
+    snapToWall(o)
+  } else {
+    const cur = o.rot != null ? o.rot : WALL_DEG[o.wall] ?? 0
+    const next = ((Math.round((cur + step) / step) * step) % 360 + 360) % 360
+    const wall = Object.entries(WALL_DEG).find(([, d]) => d === next)?.[0]
+    if (wall) { o.wall = wall; delete o.rot } else o.rot = next
+  }
+  constrain(o, 0)
+  rebuild(o); renderProps(); markDirty()
+}
+function remove(o) {
+  room.objects.splice(room.objects.indexOf(o), 1)
+  rebuild(o); selected = null; highlight(); renderProps(); renderList(); markDirty()
+}
+
+// настенное — к ближайшей стене; мебель у стены — разворачиваем спиной к ней
+function nearestWall(x, y) {
+  return Object.entries({ S: y, N: D - y, W: x, E: W - x }).sort((a, b) => a[1] - b[1])[0]
+}
+function snapToWall(o) {
+  const [wall] = nearestWall(o.x, o.y)
+  o.wall = wall
+  delete o.rot
+  const gap = o.d / 2 + 0.01
+  if (wall === 'S') o.y = gap; if (wall === 'N') o.y = D - gap
+  if (wall === 'W') o.x = gap; if (wall === 'E') o.x = W - gap
+}
+
+// пол и стены: предмет целиком внутри комнаты, не ниже пола; настенное — на стене; мебель у стены — вплотную
+function footprint(o) {
+  const a = angleOf(o)
+  return [Math.abs(o.w / 2 * Math.cos(a)) + Math.abs(o.d / 2 * Math.sin(a)), Math.abs(o.w / 2 * Math.sin(a)) + Math.abs(o.d / 2 * Math.cos(a))]
+}
+let magnet = true  // прилипание мебели к стенам; кнопка «Магнит» на панели
+function constrain(o, snap = 0.25) {
+  if (!magnet) snap = -1
+  o.elevation = Math.max(0, o.elevation || 0)
+  if (o.elevation + (o.h || 0) > H) o.elevation = Math.max(0, H - o.h)
+  if (o.mount === 'wall') { snapToWall(o); return o }
+  if (o.mount === 'ceiling') o.elevation = Math.max(0, H - o.h - 0.1)
+  if (AGAINST.has(o.category) && o.rot == null && snap >= 0) {
+    const [wall, dist] = nearestWall(o.x, o.y)
+    if (dist < o.d / 2 + snap) { o.wall = wall; snapToWall(o) }
+  }
+  const [hx, hy] = footprint(o)
+  o.x = +Math.min(W - hx, Math.max(hx, o.x)).toFixed(3)
+  o.y = +Math.min(D - hy, Math.max(hy, o.y)).toFixed(3)
+  return o
+}
+function normalizeAll() {
+  for (const o of room.objects) { constrain(o, 0.4); rebuild(o) }
+  renderList(); renderProps(); markDirty()
+}
+
+function renderList() {
+  const list = document.getElementById('list')
+  list.innerHTML = ''
+  for (const o of room.objects) {
+    const el = document.createElement('div')
+    el.className = 'item' + (o === selected ? ' sel' : '')
+    el.innerHTML = `<span class="sw" style="background:${o.color}"></span>${o.electric ? '<span class="el">⚡</span> ' : ''}${o.name}<small>${o.id} · ${o.w}×${o.d}×${o.h} м${o.power_w ? ' · ' + o.power_w + ' Вт' : ''}${o.note ? ' · ' + o.note : ''}</small>`
+    el.onclick = () => select(o)
+    list.appendChild(el)
+  }
+  const el = room.objects.filter(o => o.electric)
+  const watts = el.reduce((s, o) => s + (o.power_w || 0), 0)
+  document.getElementById('power').textContent = el.length ? `⚡ ${el.length} · ${watts >= 1000 ? (watts / 1000).toFixed(1) + ' кВт' : watts + ' Вт'}` : '⚡ электроприборов нет'
+}
+renderList()
+renderProps()
+
+// мышь: клик — выбрать, перетаскивание выбранного — двигать по полу
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+let drag = null, downAt = null
+function pick(ev) {
+  const r = renderer.domElement.getBoundingClientRect()
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1)
+  ray.setFromCamera(ndc, camera)
+  const hits = ray.intersectObjects([...meshesById.values(), shell], true)
+  const shown = m => { for (let x = m; x; x = x.parent) if (!x.visible) return false; return true }
+  for (const h of hits) {
+    if (!shown(h.object)) continue
+    let g = h.object
+    while (g && !g.userData.o && !g.userData.opening) g = g.parent
+    if (g?.userData.opening) return { op: g.userData.opening }
+    if (g?.userData.o) return { o: g.userData.o }
+    if (h.object.userData.full) return { wall: h.object.userData.wall }  // стена: её и выбираем, за ней не ищем
+  }
+  return null
+}
+window.roomEditor = {
+  pick: (x, y) => pick({ clientX: x, clientY: y }), room, gizmo,
+  screen: (x, y, z = 0) => { const v = P(x, y, z).project(camera), r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height] },
+}  // для отладки и автотестов
+
+function floorPoint(ev) {
+  const r = renderer.domElement.getBoundingClientRect()
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1)
+  ray.setFromCamera(ndc, camera)
+  const p = new THREE.Vector3()
+  return ray.ray.intersectPlane(floorPlane, p) ? { x: p.x, y: -p.z } : null
+}
+renderer.domElement.addEventListener('pointerdown', ev => {
+  downAt = { x: ev.clientX, y: ev.clientY }
+  gizmoUsed = false
+  if (gizmo.axis) return
+  const hit = pick(ev)
+  if (hit?.op && hit.op === selectedOp) { drag = { op: hit.op }; controls.enabled = false; renderer.domElement.setPointerCapture(ev.pointerId); return }
+  const o = hit?.o
+  if (o && o === selected) {
+    const f = floorPoint(ev)
+    if (f) { drag = { o, dx: o.x - f.x, dy: o.y - f.y }; controls.enabled = false; renderer.domElement.setPointerCapture(ev.pointerId) }
+  }
+})
+renderer.domElement.addEventListener('pointermove', ev => {
+  if (!drag) return
+  const f = floorPoint(ev)
+  if (!f) return
+  if (drag.op) {
+    const op = drag.op, half = op.w / 2
+    if (op.wall === 'N' || op.wall === 'S') op.x = Math.min(W - half, Math.max(half, f.x))
+    else op.y = Math.min(D - half, Math.max(half, f.y))
+    buildShell(); highlight()
+    return
+  }
+  const o = drag.o
+  o.x = Math.min(W, Math.max(0, f.x + drag.dx)); o.y = Math.min(D, Math.max(0, f.y + drag.dy))
+  if (o.mount === 'wall') snapToWall(o)
+  else if (magnet && AGAINST.has(o.category) && o.rot == null) { const [wall, dist] = nearestWall(o.x, o.y); if (dist < o.d / 2 + 0.25) o.wall = wall }
+  const pos = placeAgainst(o)
+  const g = meshesById.get(o.id)
+  g.position.copy(P(pos.x, pos.y)); g.rotation.y = angleOf(o)
+  selBox?.update?.()
+})
+renderer.domElement.addEventListener('pointerup', ev => {
+  if (drag?.op) { drag = null; controls.enabled = true; renderProps(); markDirty(); return }
+  if (drag) {
+    const o = drag.o
+    drag = null; controls.enabled = true
+    constrain(o)
+    rebuild(o); renderProps(); markDirty()
+    return
+  }
+  if (gizmoUsed || gizmo.dragging) return
+  if (downAt && Math.hypot(ev.clientX - downAt.x, ev.clientY - downAt.y) < 5) {
+    const hit = pick(ev)
+    if (hit?.op) selectOpening(hit.op); else if (hit?.wall) selectWall(hit.wall); else select(hit?.o || null)
+  }
+})
+
+addEventListener('keydown', ev => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return }
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return
+  if (ev.key === 'Escape') return select(null)
+  if (selectedWall) return
+  if (ev.key === 'm' || ev.key === 'ь') { toggleMagnet(); return }
+  if (['1', '2', '3', '4'].includes(ev.key)) { gizmoMode = ['move', 'height', 'rotate', 'scale'][+ev.key - 1]; applyGizmoMode(); return }
+  if (selectedOp && (ev.key === 'Delete' || ev.key === 'Backspace')) { room.openings.splice(room.openings.indexOf(selectedOp), 1); selectedOp = null; buildShell(); highlight(); renderProps(); markDirty(); return }
+  const o = selected
+  if (!o) return
+  const step = { ArrowLeft: [-0.05, 0], ArrowRight: [0.05, 0], ArrowUp: [0, 0.05], ArrowDown: [0, -0.05] }[ev.key]
+  if (step) { ev.preventDefault(); o.x += step[0]; o.y += step[1]; constrain(o, 0); rebuild(o); renderProps(); markDirty() }
+  if (ev.key === 'r' || ev.key === 'к') rotate(o, 45)
+  if (ev.key === 'R' || ev.key === 'К') rotate(o, 15)
+  if (ev.key === 'Delete' || ev.key === 'Backspace') remove(o)
+})
+
+// сохранение: на сервере скана — прямо в room.json рядом со страницей; иначе файлом
+const roomJson = () => JSON.stringify({ ...room, edited: new Date().toISOString() }, null, 2)
+function download() {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([roomJson()], { type: 'application/json' }))
+  a.download = 'room.json'
+  a.click()
+}
+async function save() {
+  const st = document.getElementById('savestate')
+  try {
+    const r = await fetch(location.pathname.replace(/[^/]*$/, 'room.json'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: roomJson() })
+    if (!r.ok) throw new Error(r.status)
+    dirty = false
+    st.textContent = `сохранено ${new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}`
+  } catch {
+    st.textContent = 'сервера нет — скачай файл'
+    download()
+  }
+}
+document.getElementById('save').onclick = save
+document.getElementById('download').onclick = download
+addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = '' } })
 
 // ── виды и масштаб ───────────────────────────────────────────────────────
 function resize() {
@@ -472,6 +1183,7 @@ function setView(top) {
   document.getElementById('top').classList.toggle('on', top)
   camera = top ? ortho : persp
   controls.object = camera
+  gizmo.camera = camera
   if (top) {
     ortho.position.set(W / 2, 30, -D / 2)
     ortho.up.set(0, 0, -1)
