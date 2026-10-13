@@ -76,6 +76,19 @@ def build(capture: Path):
     print(f"облако {stem}: {BUILDS[stem]} — https://localhost:{PORT}/out/{stem}/cloud.html", flush=True)
 
 
+def sessions() -> dict:
+    """Для страницы статуса на компьютере: живые сканы и всё, что уже собрано в out/."""
+    live = [{**scan.state(), "build": BUILDS.get(sid)} for sid, scan in LIVE.items()]
+    done = []
+    for d in sorted(OUT.iterdir(), reverse=True) if OUT.exists() else []:
+        if d.is_dir() and d.name not in LIVE:
+            log = d / "build.log"
+            done.append({"id": d.name, "build": BUILDS.get(d.name) or ("done" if (d / "cloud.html").exists() else None),
+                         "files": [f for f in ("cloud.html", "room.html", "plan_room.png", "sheet.jpg") if (d / f).exists()],
+                         "last": log.read_text(errors="ignore").strip().splitlines()[-1:] if log.exists() else []})
+    return {"live": live[::-1], "done": done[:12]}
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(WEB), **kw)
@@ -107,6 +120,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if parts[2] == "plan.png" and scan.plan_png:
                 return self.reply(200, scan.plan_png, "image/png")
             return self.send_error(404)
+        if parts == ["api", "sessions"]:
+            return self.reply(200, json.dumps(sessions(), ensure_ascii=False).encode())
         if self.path.startswith("/status/"):
             stem = self.path[len("/status/"):]
             log = OUT / stem / "build.log"
@@ -190,6 +205,7 @@ def main():
     srv = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     print(f"Открой на телефоне: https://{ip}:{PORT}/capture.html")
+    print(f"Статус на компьютере: https://localhost:{PORT}/monitor.html")
     print("Сертификат самоподписанный: «Подробнее» → «Перейти на сайт». Сканы падают в", CAPTURES)
     srv.serve_forever()
 

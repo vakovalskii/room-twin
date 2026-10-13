@@ -25,7 +25,7 @@ from cloud import (cached_depth, clean_mask, floor_height, grid_score, occupancy
 HFOV = 69.0
 DARK = 45       # средняя яркость 0..255: ниже — просим фонарик
 BLUR = 12       # дисперсия лапласиана на 360×640: ниже — кадр смазан (резкие кадры 30–300)
-MIN_OVERLAP = 0.3
+MIN_OVERLAP = 0.2
 
 
 def best_overlap(item: dict, near: list[dict], cam_h: float, ceiling: float) -> float:
@@ -73,7 +73,8 @@ class LiveScan:
 
     def state(self) -> dict:
         with self.lock:
-            return {"frames": [{k: f.get(k) for k in ("i", "yaw", "pitch", "state", "reason", "tip")} for f in self.frames],
+            return {"id": self.sid, "room": self.meta.get("room"), "started": self.meta.get("created"),
+                    "frames": [{k: f.get(k) for k in ("i", "yaw", "pitch", "row", "state", "reason", "tip")} for f in self.frames],
                     "plan_ver": self.plan_ver, "size": self.size, "queued": self.q.qsize()}
 
     def _worker(self):
@@ -93,7 +94,7 @@ class LiveScan:
         d = cached_depth(self.sess, img, self.out / "depth" / f"{i:03d}.npy")
         cam, vs, us = to_cam(d, focal_px(*img.size, HFOV), step=6)
         item = {"i": i, "yaw": fr["yaw"], "pitch": fr["pitch"], "scale": 1.0, "cam": cam,
-                "ok": clean_mask(d)[vs, us], "rgb": np.asarray(img)[vs, us], "checked": False}
+                "ok": clean_mask(d)[vs, us], "rgb": np.asarray(img)[vs, us]}
         fr["tip"] = "темновато — включи фонарик" if g.mean() < DARK else None
         if sharpness(g) < BLUR:
             fr.update(state="bad", reason="смазано — замри перед кадром")
@@ -105,31 +106,37 @@ class LiveScan:
         self._replan(cam_h)
 
     def _check_all(self) -> float:
-        """Кадр сверяем со стенами соседних (±45° по курсу), как только соседей хотя бы трое.
-        Ранние кадры ждут соседей и проверяются позже — тогда сектор может покраснеть задним числом."""
+        """Кадр сверяем со стенами принятых соседей (±30° по курсу). Мало соседей — кадр пока принят;
+        забракованный перепроверяется, когда соседей прибавилось, и может снова стать принятым."""
         ceiling = self.meta.get("ceiling_m") or 2.7
         with self.lock:
-            frames = [self.cloud[k] for k in sorted(self.cloud)]
-        cam_h = floor_height(frames) if len(frames) >= 4 else 1.2
-        if len(frames) < 6:  # высота телефона над полом ещё не устоялась — сверять рано
+            items = [self.cloud[k] for k in sorted(self.cloud)]
+        good = lambda: [f for f in items if self.frames[f["i"]]["state"] == "ok"]
+        cam_h = floor_height(good()) if len(good()) >= 4 else 1.2
+        if len(items) < 6:  # высота телефона над полом ещё не устоялась — сверять рано
             return cam_h
-        for it in frames:
-            if it["checked"]:
+        for it in items:
+            if it.get("confirmed"):
                 continue
-            near = [f for f in frames if f is not it and abs((f["yaw"] - it["yaw"] + 540) % 360 - 180) < 45]
-            if len(near) < 3:
+            if abs(it["pitch"]) > 15:  # вниз/вверх стен почти не видно — сверять не с чем
+                it["confirmed"] = True
                 continue
-            it["checked"] = True
-            if best_overlap(it, near, cam_h, ceiling) < MIN_OVERLAP:
+            near = [f for f in good() if f is not it and abs(f["pitch"]) <= 15
+                    and abs((f["yaw"] - it["yaw"] + 540) % 360 - 180) < 30]
+            if len(near) < 2 or len(near) == it.get("seen"):
+                continue
+            it["seen"] = len(near)
+            if best_overlap(it, near, cam_h, ceiling) >= MIN_OVERLAP:
+                self.frames[it["i"]].update(state="ok", reason=None)
+                it["confirmed"] = len(near) >= 3
+            else:
                 self.frames[it["i"]].update(state="bad", reason="не совпал с соседними кадрами (человек, пол, предмет вплотную?) — сними это направление ещё раз")
-                with self.lock:
-                    self.cloud.pop(it["i"], None)
         return cam_h
 
     def _replan(self, cam_h: float):
         ceiling = self.meta.get("ceiling_m") or 2.7
         with self.lock:
-            frames = [self.cloud[k] for k in sorted(self.cloud)]
+            frames = [self.cloud[k] for k in sorted(self.cloud) if self.frames[k]["state"] == "ok"]
         if not frames:
             return
         pts = []
