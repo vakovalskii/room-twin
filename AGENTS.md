@@ -1,13 +1,16 @@
 # Room Twin — инструкции для агента (Codex и др.)
 
-Тот же контракт, что в `SKILL.md`: скан комнаты с телефона → `room.json` + 3D-вьюер `room.html`.
+Тот же контракт, что в `SKILL.md` (там подробно): телефон снимает → компьютер строит облако →
+ты собираешь `room.json` → человек правит в редакторе.
 
-1. Проверь модель глубины `models/da2-metric-indoor-small.onnx`; нет — `tools/export_depth.py` (см. SKILL.md).
-2. Проверь ключ `NEURALDEEP_API_KEY` (sk-…, hub.neuraldeep.ru).
-3. Съёмка: `python scripts/serve_capture.py`, ссылку открыть на телефоне в той же Wi-Fi.
-   Скан падает в `captures/`. Либо пользователь присылает `room-capture-*.json` сам.
-4. Сборка: `python scripts/build_room.py <скан> --out out/<комната>` (зависимости: numpy, onnxruntime, pillow).
-5. Отдай `room.html`, размеры и `fit_error_m`; при разбросе стен > 0.3 м предложи переснять.
-6. Правки — в `room.json`, затем `python scripts/render_html.py out/<комната>/room.json`.
+1. Модель глубины `models/da2-metric-indoor-small.onnx`; нет — `tools/export_depth.py` (см. README).
+2. Сервер в фоне: `uv run --with numpy --with onnxruntime --with pillow python scripts/serve_capture.py`.
+   Открой пользователю `https://localhost:8443/`, адрес для телефона — во вкладке «Телефон» (QR).
+3. Следи: `python scripts/watch.py` (в фоне). Пересказывай события; `ГОТОВО out/<id>` — облако собрано.
+4. Собери комнату сам: `python scripts/sheet.py out/<id>`, `python scripts/heightmap.py out/<id>`,
+   посмотри `plan_room.png`, `height.png`, `sheet.jpg`, `poses.json` и напиши `out/<id>/room.json`
+   (формат — README, «Формат room.json»). Потом `python scripts/render_html.py out/<id>/room.json`.
+5. Отдай: размеры, `fit_error_m` (> 0.3 м — предложи переснять), список предметов; дальше человек
+   правит в «Комнаты» → «Редактор». Перед своей правкой `room.json` перечитай его — человек мог сохранить.
 
-Не трогай `captures/` без просьбы: там исходные сканы пользователя.
+Не трогай `captures/` без просьбы: там исходные сканы пользователя (с его фото).
